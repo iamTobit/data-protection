@@ -167,7 +167,7 @@ Open `http://localhost:5000` in your browser.
 
 ---
 
-## 🧪 Testing the Compliance Scanner
+## Testing the Compliance Scanner
 
 1. **Option 1: Scan Live URL**
    - Enter a Kenyan business URL (e.g. `https://example.com`). The crawler will automatically inspect the page, locate the `/privacy` or `/terms` link, extract the plain text, and run the audit.
@@ -186,7 +186,7 @@ Open `http://localhost:5000` in your browser.
 
 ---
 
-## 💰 M-Pesa Paywall & Unlocking
+## M-Pesa Paywall & Unlocking
 
 The report view reveals:
 - **Free Preview**: Overall Risk Level badge (High, Medium, Low), compliance index score, and **Violation #1 fully unlocked** with exact statutory citation (e.g. *Kenya Data Protection Act 2019, Section 37*).
@@ -234,9 +234,3 @@ The report view reveals:
 
 ## 🛡️ License
 MIT License. Developed for Kenyan organizations, compliance officers, and legal teams seeking proactive ODPC audit readiness.
-# data-protection
-# data-protection
-# data-protection
-# data-protection
-# data-protection
-# data-protection
