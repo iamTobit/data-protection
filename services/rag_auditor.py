@@ -118,10 +118,19 @@ def generate_embedding(text: str) -> List[float]:
 DEFAULT_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
     ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.5",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Sec-Ch-Ua": '"Not/A)Brand";v="8", "Chromium";v="126", "Google Chrome";v="126"',
+    "Sec-Ch-Ua-Mobile": "?0",
+    "Sec-Ch-Ua-Platform": '"macOS"',
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+    "Upgrade-Insecure-Requests": "1",
 }
 
 PRIVACY_KEYWORDS = [
@@ -238,7 +247,15 @@ def scrape_policy_from_url(target_url: str, timeout: int = 15) -> Dict[str, str]
         }
 
     except requests.exceptions.Timeout:
-        raise ValueError(f"Connection timed out while trying to reach {target_url}. Please check the URL or paste text.")
+        raise ValueError(f"Connection timed out while trying to reach {target_url}. Please check the URL or paste text directly.")
+    except requests.exceptions.HTTPError as he:
+        status_code = he.response.status_code if he.response is not None else 0
+        if status_code in [403, 401]:
+            raise ValueError(
+                f"🔒 Anti-Bot Protection Detected (HTTP {status_code}): '{parsed.netloc}' uses Cloudflare/Akamai bot protection "
+                f"that restricts automated web scrapers. Please copy the policy text from your browser and paste it directly into the 'Paste Policy' tab."
+            )
+        raise ValueError(f"HTTP error {status_code} accessing {target_url}: {he}. Please paste the policy text directly.")
     except requests.exceptions.RequestException as e:
         raise ValueError(f"Failed to fetch {target_url}: {e}. Please ensure the site is public or paste the text directly.")
 
