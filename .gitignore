@@ -1,0 +1,27 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment variables
+.env
+.env.local
+
+# Virtual environments
+.venv/
+env/
+venv/
+ENV/
+
+# Pipenv
+Pipfile.lock
+
+# IDE & OS
+.DS_Store
+.idea/
+.vscode/
+
+# Unit test & coverage
+.pytest_cache/
+.coverage
+htmlcov/
