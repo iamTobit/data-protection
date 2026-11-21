@@ -140,8 +140,13 @@ PRIVACY_KEYWORDS = [
 
 
 def clean_html_text(html_content: str) -> str:
-    """Extracts visible, cleaned plain text from HTML, discarding boilerplate."""
-    soup = BeautifulSoup(html_content, "html.parser")
+    """Extracts visible, cleaned plain text from HTML, discarding boilerplate and NUL bytes."""
+    if not html_content:
+        return ""
+        
+    # Strip any NUL (0x00) bytes right away from raw HTML input
+    sanitized_html = html_content.replace("\x00", "")
+    soup = BeautifulSoup(sanitized_html, "html.parser")
     
     # Remove irrelevant tags
     for tag in soup(["script", "style", "nav", "header", "footer", "aside", "svg", "noscript", "form", "iframe"]):
@@ -151,14 +156,15 @@ def clean_html_text(html_content: str) -> str:
     text_blocks = []
     for element in soup.find_all(["h1", "h2", "h3", "h4", "p", "li"]):
         txt = element.get_text(separator=" ", strip=True)
+        txt = txt.replace("\x00", "")
         if txt and len(txt) > 20:
             text_blocks.append(txt)
             
     if not text_blocks:
         # Fallback to broad text extraction
-        return soup.get_text(separator="\n", strip=True)
+        return soup.get_text(separator="\n", strip=True).replace("\x00", "")
         
-    return "\n\n".join(text_blocks)
+    return "\n\n".join(text_blocks).replace("\x00", "")
 
 
 def scrape_policy_from_url(target_url: str, timeout: int = 15) -> Dict[str, str]:
@@ -195,12 +201,17 @@ def scrape_policy_from_url(target_url: str, timeout: int = 15) -> Dict[str, str]
         response = session.get(target_url, timeout=timeout, allow_redirects=True)
         response.raise_for_status()
         
-        soup = BeautifulSoup(response.text, "html.parser")
-        page_title = soup.title.string.strip() if soup.title and soup.title.string else parsed.netloc
+        if response.encoding is None or response.encoding.lower() == 'iso-8859-1':
+            response.encoding = response.apparent_encoding or 'utf-8'
+            
+        raw_html = response.text.replace("\x00", "")
+        soup = BeautifulSoup(raw_html, "html.parser")
+        raw_title = soup.title.string.strip() if soup.title and soup.title.string else parsed.netloc
+        page_title = raw_title.replace("\x00", "")
         
         # Check if the current page already looks like a dedicated privacy policy
         is_direct_policy = any(k in response.url.lower() or k in page_title.lower() for k in ["privacy", "data-protection"])
-        clean_text = clean_html_text(response.text)
+        clean_text = clean_html_text(raw_html)
         
         # If it's a home page or direct text is small, look for a Privacy Policy link
         if not is_direct_policy or len(clean_text) < 400:
@@ -221,15 +232,21 @@ def scrape_policy_from_url(target_url: str, timeout: int = 15) -> Dict[str, str]
                 try:
                     policy_resp = session.get(privacy_link, timeout=timeout, allow_redirects=True)
                     policy_resp.raise_for_status()
-                    policy_soup = BeautifulSoup(policy_resp.text, "html.parser")
-                    policy_text = clean_html_text(policy_resp.text)
+                    
+                    if policy_resp.encoding is None or policy_resp.encoding.lower() == 'iso-8859-1':
+                        policy_resp.encoding = policy_resp.apparent_encoding or 'utf-8'
+                        
+                    policy_html = policy_resp.text.replace("\x00", "")
+                    policy_soup = BeautifulSoup(policy_html, "html.parser")
+                    policy_text = clean_html_text(policy_html)
                     
                     if len(policy_text) >= 300:
-                        title = policy_soup.title.string.strip() if policy_soup.title and policy_soup.title.string else page_title
+                        raw_p_title = policy_soup.title.string.strip() if policy_soup.title and policy_soup.title.string else page_title
+                        title = raw_p_title.replace("\x00", "")
                         return {
-                            "source_url": policy_resp.url,
+                            "source_url": policy_resp.url.replace("\x00", ""),
                             "title": title,
-                            "text": policy_text
+                            "text": policy_text.replace("\x00", "")
                         }
                 except Exception as link_err:
                     logger.warning("Could not fetch discovered privacy link %s: %s", privacy_link, link_err)
@@ -241,9 +258,9 @@ def scrape_policy_from_url(target_url: str, timeout: int = 15) -> Dict[str, str]
             )
 
         return {
-            "source_url": response.url,
+            "source_url": response.url.replace("\x00", ""),
             "title": page_title,
-            "text": clean_text
+            "text": clean_text.replace("\x00", "")
         }
 
     except requests.exceptions.Timeout:
