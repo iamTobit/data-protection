@@ -390,25 +390,30 @@ Users cannot delete their records or withdraw consent while their mobile applica
         const steps = [
             "Crawling policy text & extracting disclosures...",
             "Computing 384-dimensional BGE embeddings...",
-            "Executing pgvector cosine distance search in legal_chunks...",
+            "Retrieving statutory ODPC provisions from legal database...",
             "Auditing against Section 25 Principles & Section 32 Consent...",
-            "Checking Section 37 Direct Marketing & 72-Hour Breach rules...",
+            "Checking Section 37 Direct Marketing & Cross-Border transfers...",
+            "Verifying 72-Hour Breach & Statutory Data Subject Rights...",
+            "Evaluating Section 44 Sensitive Data & Child protection rules...",
             "Compiling ODPC compliance verdict & teaser report..."
         ];
 
-        let i = 0;
+        let stepIdx = 0;
+        let progress = 15;
         const textEl = document.getElementById("scan-step-text");
         const barEl = document.getElementById("progress-bar-inner");
+        if (textEl) textEl.innerText = steps[0];
+        if (barEl) barEl.style.width = "15%";
 
-        const interval = setInterval(() => {
-            i++;
-            if (i < steps.length) {
-                textEl.innerText = steps[i];
-                barEl.style.width = `${((i + 1) / steps.length) * 100}%`;
-            } else {
-                clearInterval(interval);
+        setInterval(() => {
+            stepIdx = (stepIdx + 1) % steps.length;
+            if (textEl) textEl.innerText = steps[stepIdx];
+            if (progress < 92) {
+                progress += Math.floor(Math.random() * 8) + 6;
+                if (progress > 92) progress = 92;
+                if (barEl) barEl.style.width = `${progress}%`;
             }
-        }, 1200);
+        }, 1100);
     }
 
     // Auto-switch to Paste tab if previous scan was blocked by an anti-bot challenge

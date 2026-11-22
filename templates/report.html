@@ -297,19 +297,19 @@ endblock %}
                     class="text-base font-black {% if overall_score < 50 %}text-red-400{% elif overall_score < 75 %}text-amber-400{% else %}text-emerald-400{% endif %}">{{
                     overall_score }}/100</span>
             </div>
-            {% if requires_redraft and (overall_score < 95 and all_violations|length > 0) %}
-            <i data-lucide="arrow-right" class="w-4 h-4 text-emerald-400"></i>
-            <div class="text-center">
-                <span class="text-[10px] text-slate-400 uppercase block font-semibold">Projected with Fix</span>
-                <span class="text-base font-black text-emerald-400">{{ projected_score }}/100</span>
-            </div>
-            {% else %}
-            <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
-            <div class="text-center">
-                <span class="text-[10px] text-slate-400 uppercase block font-semibold">Compliance Status</span>
-                <span class="text-base font-black text-emerald-400">Optimal (Passed)</span>
-            </div>
-            {% endif %}
+            {% if requires_redraft and (overall_score < 95 and all_violations|length> 0) %}
+                <i data-lucide="arrow-right" class="w-4 h-4 text-emerald-400"></i>
+                <div class="text-center">
+                    <span class="text-[10px] text-slate-400 uppercase block font-semibold">Projected with Fix</span>
+                    <span class="text-base font-black text-emerald-400">{{ projected_score }}/100</span>
+                </div>
+                {% else %}
+                <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
+                <div class="text-center">
+                    <span class="text-[10px] text-slate-400 uppercase block font-semibold">Compliance Status</span>
+                    <span class="text-base font-black text-emerald-400">Optimal (Passed)</span>
+                </div>
+                {% endif %}
         </div>
     </div>
 
@@ -318,7 +318,8 @@ endblock %}
         <div class="flex items-center justify-between mb-4">
             <div>
                 <h2 class="text-xl font-bold text-slate-900 flex items-center gap-2">
-                    <i data-lucide="file-warning" class="w-5 h-5 {% if all_violations|length > 0 %}text-amber-600{% else %}text-emerald-600{% endif %}"></i>
+                    <i data-lucide="file-warning"
+                        class="w-5 h-5 {% if all_violations|length > 0 %}text-amber-600{% else %}text-emerald-600{% endif %}"></i>
                     <span>Potential Statutory Alignment Gaps ({{ all_violations|length }})</span>
                 </h2>
                 <p class="text-xs text-slate-500 mt-0.5">
@@ -338,12 +339,14 @@ endblock %}
         {% if all_violations|length == 0 %}
         <!-- NO GAPS DETECTED BANNER -->
         <div class="p-6 rounded-2xl bg-emerald-50 border border-emerald-200 text-center mb-5">
-            <div class="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto mb-3">
+            <div
+                class="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto mb-3">
                 <i data-lucide="check-circle-2" class="w-6 h-6"></i>
             </div>
             <h3 class="text-base font-bold text-emerald-950">No Statutory Gaps Detected</h3>
             <p class="text-xs text-emerald-800 mt-1 max-w-md mx-auto">
-                Your submitted privacy policy fully complies with statutory obligations under the Kenya Data Protection Act, 2019 and ODPC Regulations.
+                Your submitted privacy policy fully complies with statutory obligations under the Kenya Data Protection
+                Act, 2019 and ODPC Regulations.
             </p>
         </div>
         {% endif %}
@@ -491,19 +494,24 @@ endblock %}
     <div id="compliant-policy-section" class="mb-14">
         {% if not requires_redraft or overall_score >= 95 or all_violations|length == 0 %}
         <!-- PASS BADGE: NO POLICY REDRAFT REQUIRED -->
-        <div class="bg-gradient-to-br from-emerald-50 to-green-50 rounded-2xl border-2 border-emerald-200 p-8 text-center shadow-sm">
-            <div class="w-16 h-16 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto mb-4 border border-emerald-200 shadow-sm">
+        <div
+            class="bg-gradient-to-br from-emerald-50 to-green-50 rounded-2xl border-2 border-emerald-200 p-8 text-center shadow-sm">
+            <div
+                class="w-16 h-16 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto mb-4 border border-emerald-200 shadow-sm">
                 <i data-lucide="shield-check" class="w-9 h-9 text-emerald-600"></i>
             </div>
-            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-300 mb-2">
+            <span
+                class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-300 mb-2">
                 <i data-lucide="check" class="w-3.5 h-3.5 text-emerald-600"></i> AUDIT PASSED ({{ overall_score }}/100)
             </span>
             <h3 class="text-xl font-black text-slate-900 mt-1 mb-2">
                 ✅ Fully ODPC-Aligned — No policy redraft required.
             </h3>
             <p class="text-xs sm:text-sm text-slate-600 max-w-xl mx-auto leading-relaxed">
-                The submitted privacy notice meets statutory compliance standards under the Kenya Data Protection Act, 2019
-                and the Data Protection (General) Regulations, 2021 with an overall score of <strong>{{ overall_score }}/100</strong>.
+                The submitted privacy notice meets statutory compliance standards under the Kenya Data Protection Act,
+                2019
+                and the Data Protection (General) Regulations, 2021 with an overall score of <strong>{{ overall_score
+                    }}/100</strong>.
                 Your existing documentation is legally compliant and does not require an automated redraft.
             </p>
         </div>
@@ -675,13 +683,15 @@ endblock %}
                     <span>Send M-Pesa STK Push</span>
                 </button>
 
-                <!-- Sandbox Instant Simulation Helper -->
+                <!-- Sandbox Instant Simulation Helper (Only rendered in sandbox mode) -->
+                {% if mpesa_env == 'sandbox' %}
                 <div class="mt-4 pt-3 border-t border-slate-100 text-center">
                     <button type="button" onclick="triggerSimulatedPayment()"
                         class="text-xs text-slate-500 hover:text-emerald-700 underline font-medium">
                         Developer Sandbox: Simulate Immediate Unlock
                     </button>
                 </div>
+                {% endif %}
             </div>
 
             <!-- Waiting / Polling View -->
@@ -704,12 +714,14 @@ endblock %}
                     <span>Awaiting Safaricom confirmation...</span>
                 </div>
 
+                {% if mpesa_env == 'sandbox' %}
                 <div class="mt-6">
                     <button type="button" onclick="triggerSimulatedPayment()"
                         class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-lg border border-slate-200 font-semibold transition">
                         Testing in Sandbox? Click to Simulate Instant Confirmation
                     </button>
                 </div>
+                {% endif %}
             </div>
 
             <!-- Support Note in Modal -->

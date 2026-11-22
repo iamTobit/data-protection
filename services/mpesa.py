@@ -37,8 +37,20 @@ def get_callback_url() -> str:
     """
     Returns the M-Pesa STK push callback URL dynamically from environment variables.
     Ensures no hardcoded localhost or ngrok URLs are used in production.
+    Automatically ensures the path ends with /api/mpesa/callback.
     """
-    return os.getenv("MPESA_CALLBACK_URL", "").strip()
+    url = os.getenv("MPESA_CALLBACK_URL", "").strip()
+    if not url:
+        railway_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN", "").strip()
+        if railway_domain:
+            url = f"https://{railway_domain}/api/mpesa/callback"
+        else:
+            url = "https://web-production-6eedea49.up.railway.app/api/mpesa/callback"
+
+    if url and not url.endswith("/api/mpesa/callback"):
+        url = url.rstrip("/") + "/api/mpesa/callback"
+
+    return url
 
 # In-memory access token cache: (token, expiry_timestamp)
 _TOKEN_CACHE: Tuple[Optional[str], float] = (None, 0.0)
