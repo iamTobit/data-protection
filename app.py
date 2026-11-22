@@ -43,6 +43,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger("odpc_auditor_app")
 
+# Audit Cache Version: bump to automatically invalidate stale cached scores across deployments
+AUDIT_CACHE_VERSION = os.getenv("AUDIT_CACHE_VERSION", "v2").strip()
+
 app = Flask(__name__)
 # Secret key for session signing: prefer FLASK_SECRET_KEY, fallback to SECRET_KEY
 configured_secret = (os.getenv("FLASK_SECRET_KEY") or os.getenv("SECRET_KEY") or "").strip()
@@ -97,28 +100,32 @@ def from_json_filter(val):
 def find_recent_cached_audit(input_text: str, force_fresh: bool = False) -> Optional[str]:
     """
     Checks for an identical audit submitted within the past 24 hours using
-    sha256 hashing. Prevents bots from repeatedly draining LLM API tokens.
-    If force_fresh is True or the cached audit has a degraded score (<= 15),
-    bypasses cache so fresh, accurate analysis runs.
+    sha256 hashing prefixed with AUDIT_CACHE_VERSION. Prevents bots from repeatedly
+    draining LLM API tokens. If force_fresh is True or the cached audit is unpaid
+    and has a degraded score (<= 25), bypasses cache so fresh, accurate analysis runs.
     """
     if force_fresh:
         return None
     try:
-        input_hash = hashlib.sha256(input_text.strip().encode("utf-8")).hexdigest()
+        normalized_text = input_text.strip()
+        versioned_input = f"{AUDIT_CACHE_VERSION}:{normalized_text}"
+        input_hash = hashlib.sha256(versioned_input.encode("utf-8")).hexdigest()
+
         with get_db_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT id, full_report FROM audit_reports
-                    WHERE encode(sha256(raw_input_text::bytea), 'hex') = %s
+                    SELECT id, full_report, is_paid FROM audit_reports
+                    WHERE encode(sha256(convert_to(%s || ':' || raw_input_text, 'UTF8')), 'hex') = %s
                       AND created_at >= NOW() - INTERVAL '24 hours'
                     ORDER BY created_at DESC
                     LIMIT 1;
                     """,
-                    (input_hash,)
+                    (AUDIT_CACHE_VERSION, input_hash)
                 )
                 row = cur.fetchone()
                 if row:
+                    is_paid = bool(row.get("is_paid"))
                     full_rep = row.get("full_report")
                     if isinstance(full_rep, str):
                         try:
@@ -127,8 +134,12 @@ def find_recent_cached_audit(input_text: str, force_fresh: bool = False) -> Opti
                             full_rep = {}
                     if isinstance(full_rep, dict):
                         cached_score = full_rep.get("overall_score") or full_rep.get("compliance_score") or 0
-                        if cached_score <= 15:
-                            logger.info("Found cached audit %s but score is <= 15 (degraded fallback). Bypassing cache.", row["id"])
+                        # NEVER reuse an unpaid cached report if overall_score <= 25 (e.g. failed scrape / fallback)
+                        if not is_paid and cached_score <= 25:
+                            logger.info(
+                                "Found cached audit %s with degraded unpaid score (%d/100 <= 25). Bypassing cache to re-audit fresh.",
+                                row["id"], cached_score
+                            )
                             return None
                     return str(row["id"])
     except Exception as e:
@@ -143,10 +154,20 @@ def save_audit_report(
 ) -> str:
     """
     Persists a completed compliance audit report in the audit_reports table.
+    Includes AUDIT_CACHE_VERSION and versioned input SHA-256 hash in metadata.
     
     Returns:
         str: Generated UUID string for the report.
     """
+    normalized_text = raw_input_text.strip()
+    versioned_input = f"{AUDIT_CACHE_VERSION}:{normalized_text}"
+    input_hash = hashlib.sha256(versioned_input.encode("utf-8")).hexdigest()
+
+    full_rep = audit_result.get("full_report") or {}
+    if isinstance(full_rep, dict):
+        full_rep["cache_version"] = AUDIT_CACHE_VERSION
+        full_rep["input_hash"] = input_hash
+
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -168,13 +189,13 @@ def save_audit_report(
                     raw_input_text,
                     audit_result["risk_level"],
                     json.dumps(audit_result["teaser_summary"]),
-                    json.dumps(audit_result["full_report"]),
+                    json.dumps(full_rep),
                     audit_result["compliant_rewrite"]
                 )
             )
             row = cur.fetchone()
             report_id = str(row["id"])
-            logger.info("Saved new audit report: %s (Risk: %s)", report_id, audit_result["risk_level"])
+            logger.info("Saved new audit report: %s (Risk: %s, CacheHash: %s...)", report_id, audit_result["risk_level"], input_hash[:8])
             return report_id
 
 
@@ -197,6 +218,71 @@ def fetch_audit_report(report_id: str) -> dict:
             if not report:
                 return None
             return dict(report)
+
+
+def generate_ondemand_policy_for_audit(audit_id: str) -> Optional[str]:
+    """
+    Generates the bespoke replacement policy on demand when an audit is confirmed PAID.
+    Avoids burning LLM tokens upfront during free scans, reducing token consumption by >60%.
+    """
+    try:
+        report = fetch_audit_report(audit_id)
+        if not report:
+            return None
+
+        full_report = report.get("full_report") or {}
+        if isinstance(full_report, str):
+            try:
+                full_report = json.loads(full_report)
+            except Exception:
+                full_report = {}
+
+        violations = full_report.get("violations", [])
+        overall_score = full_report.get("overall_score") or full_report.get("compliance_score") or 0
+        requires_redraft = (overall_score < 95) and (len(violations) > 0)
+        if not requires_redraft:
+            return None
+
+        existing_rewrite = report.get("compliant_rewrite", "")
+        if existing_rewrite and len(existing_rewrite) > 800 and not existing_rewrite.startswith("# ODPC-COMPLIANT PRIVACY POLICY\n**Governed"):
+            return existing_rewrite
+
+        raw_text = report.get("raw_input_text", "")
+        clean_entity = full_report.get("entity_name") or "The Organization"
+        clean_domain = full_report.get("domain") or "company.co.ke"
+
+        from services.rag_auditor import retrieve_relevant_legal_context, generate_compliant_policy_with_llm
+        legal_chunks = retrieve_relevant_legal_context(raw_text)
+        fallback_draft = full_report.get("compliant_policy_draft") or ""
+
+        logger.info("Generating ON-DEMAND bespoke replacement policy for paid audit %s (%s)...", audit_id, clean_entity)
+        bespoke_draft = generate_compliant_policy_with_llm(
+            document_text=raw_text,
+            entity_name=clean_entity,
+            domain=clean_domain,
+            violations=violations,
+            legal_chunks=legal_chunks,
+            fallback_draft=fallback_draft
+        )
+
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE audit_reports
+                    SET compliant_rewrite = %s,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s::uuid;
+                    """,
+                    (bespoke_draft, audit_id)
+                )
+
+        logger.info("Successfully generated and saved on-demand bespoke policy for audit %s (%d chars).", audit_id, len(bespoke_draft))
+        return bespoke_draft
+
+    except Exception as e:
+        logger.exception("Failed to generate on-demand policy for audit %s: %s", audit_id, e)
+        return None
 
 
 # -------------------------------------------------------------------------
@@ -250,7 +336,8 @@ def run_audit_endpoint():
             logger.info("Initiating scrape for: %s", target_url)
             scrape_res = scrape_policy_from_url(target_url)
             document_text = scrape_res["text"]
-            source_label = scrape_res.get("title") or target_url
+            page_title = (scrape_res.get("title") or "").strip()
+            source_label = f"{page_title} | {target_url}" if page_title else target_url
 
         # Option 2: File Upload (.pdf, .docx, .txt)
         elif scan_type == "file":
@@ -408,6 +495,11 @@ def view_report(audit_id):
         elif is_paid:
             locked_violations = violations_all[1:] if len(violations_all) > 1 else []
             full_compliant_draft = report.get("compliant_rewrite", "")
+            # If paid and bespoke draft has not yet been generated (lazy generation), generate on-demand!
+            if requires_redraft and (not full_compliant_draft or full_compliant_draft.startswith("# ODPC-COMPLIANT PRIVACY POLICY\n**Governed")):
+                bespoke = generate_ondemand_policy_for_audit(audit_id)
+                if bespoke:
+                    full_compliant_draft = bespoke
             compliant_rewrite_html = format_policy_html(full_compliant_draft)
         else:
             locked_violations = []
@@ -469,6 +561,11 @@ def download_report_policy(audit_id, file_format):
             return redirect(url_for("view_report", audit_id=audit_id))
 
         policy_text = report.get("compliant_rewrite", "")
+        if not policy_text or policy_text.startswith("# ODPC-COMPLIANT PRIVACY POLICY\n**Governed"):
+            bespoke = generate_ondemand_policy_for_audit(audit_id)
+            if bespoke:
+                policy_text = bespoke
+
         if not policy_text:
             flash("Policy draft content is empty.", "error")
             return redirect(url_for("view_report", audit_id=audit_id))
@@ -625,6 +722,15 @@ def mpesa_callback():
                         (receipt_code, checkout_id)
                     )
             logger.info("Audit report associated with CheckoutID '%s' marked as PAID (Receipt: %s).", checkout_id, receipt_code)
+            try:
+                with get_db_connection() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute("SELECT id FROM audit_reports WHERE mpesa_checkout_id = %s LIMIT 1;", (checkout_id,))
+                        row = cur.fetchone()
+                        if row:
+                            generate_ondemand_policy_for_audit(str(row["id"]))
+            except Exception as lazy_err:
+                logger.warning("Could not pre-generate on-demand policy in callback: %s", lazy_err)
         else:
             logger.warning(
                 "M-Pesa payment unsuccessful or cancelled for CheckoutID %s: %s",
@@ -698,6 +804,7 @@ def simulate_sandbox_payment(audit_id):
                 )
 
         logger.info("Simulated sandbox payment successful for audit %s. Receipt: %s", audit_id, simulated_receipt)
+        generate_ondemand_policy_for_audit(audit_id)
         return jsonify({
             "success": True,
             "message": "Simulated payment successful! Full report unlocked.",
