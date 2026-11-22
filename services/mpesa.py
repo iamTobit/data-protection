@@ -13,7 +13,7 @@ from typing import Dict, Any, Optional, Tuple
 import requests
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 logger = logging.getLogger(__name__)
 
@@ -30,8 +30,15 @@ PASSKEY = os.getenv(
     "bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919"  # Default sandbox passkey
 ).strip()
 SHORTCODE = os.getenv("MPESA_SHORTCODE", "174379").strip()
-CALLBACK_URL = os.getenv("MPESA_CALLBACK_URL", "https://example.com/api/mpesa/callback").strip()
 REPORT_PRICE = int(os.getenv("REPORT_UNLOCK_PRICE_KES", "1000"))
+
+
+def get_callback_url() -> str:
+    """
+    Returns the M-Pesa STK push callback URL dynamically from environment variables.
+    Ensures no hardcoded localhost or ngrok URLs are used in production.
+    """
+    return os.getenv("MPESA_CALLBACK_URL", "").strip()
 
 # In-memory access token cache: (token, expiry_timestamp)
 _TOKEN_CACHE: Tuple[Optional[str], float] = (None, 0.0)
@@ -186,6 +193,13 @@ def initiate_stk_push(
         # Embed audit_id into account_ref or transaction description for traceability
         short_ref = (account_ref[:12] if len(account_ref) > 12 else account_ref)
         
+        callback_url = get_callback_url()
+        if not callback_url:
+            logger.warning(
+                "MPESA_CALLBACK_URL is not set in environment variables. "
+                "Safaricom will be unable to reach the callback endpoint."
+            )
+
         payload = {
             "BusinessShortCode": SHORTCODE,
             "Password": password,
@@ -195,7 +209,7 @@ def initiate_stk_push(
             "PartyA": formatted_phone,
             "PartyB": SHORTCODE,
             "PhoneNumber": formatted_phone,
-            "CallBackURL": CALLBACK_URL,
+            "CallBackURL": callback_url or "https://seraguard.co.ke/api/mpesa/callback",
             "AccountReference": short_ref,
             "TransactionDesc": f"ODPC Audit Unlock {audit_id[:8] if audit_id else ''}"
         }
@@ -290,3 +304,60 @@ def parse_mpesa_callback(payload: Dict[str, Any]) -> Dict[str, Any]:
         "amount": amount,
         "phone_number": phone_number
     }
+
+
+def query_stk_status(checkout_request_id: str) -> Dict[str, Any]:
+    """
+    Queries Safaricom Daraja STK Push Query API to verify status of an STK transaction.
+    Protects against spoofed callback attacks by querying Daraja directly.
+
+    Args:
+        checkout_request_id: CheckoutRequestID received during initiate_stk_push.
+
+    Returns:
+        Dict containing success, result_code, result_desc.
+    """
+    if not CONSUMER_KEY or not CONSUMER_SECRET:
+        # Development / sandbox mock mode: return success if mock checkout ID
+        if checkout_request_id and "ws_CO_" in checkout_request_id:
+            return {"success": True, "result_code": 0, "result_desc": "Mock verified in dev/sandbox mode."}
+        return {"success": False, "result_code": -1, "result_desc": "M-Pesa credentials not configured."}
+
+    try:
+        access_token = generate_daraja_token()
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        password = generate_stk_password(SHORTCODE, PASSKEY, timestamp)
+
+        query_endpoint = f"{get_base_url()}/mpesa/stkpushquery/v1/query"
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "BusinessShortCode": SHORTCODE,
+            "Password": password,
+            "Timestamp": timestamp,
+            "CheckoutRequestID": checkout_request_id
+        }
+
+        logger.info("Querying Daraja STK status for CheckoutRequestID %s...", checkout_request_id)
+        resp = requests.post(query_endpoint, json=payload, headers=headers, timeout=20)
+        data = resp.json()
+        logger.info("Daraja STK status query response: %s", data)
+
+        res_code = str(data.get("ResultCode", ""))
+        is_success = (res_code == "0")
+
+        return {
+            "success": is_success,
+            "result_code": data.get("ResultCode"),
+            "result_desc": data.get("ResultDesc", "No description returned from Daraja."),
+            "response_code": data.get("ResponseCode")
+        }
+    except Exception as e:
+        logger.exception("Failed to query Daraja STK status: %s", e)
+        return {
+            "success": False,
+            "result_code": -1,
+            "result_desc": f"Network error during Daraja query: {e}"
+        }

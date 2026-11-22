@@ -168,10 +168,11 @@ class TestFlaskRoutes(unittest.TestCase):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
         content = response.data.decode("utf-8")
-        self.assertIn("ODPC Auditor", content)
+        self.assertIn("SeraGuard", content)
         self.assertIn("Kenya Data Protection Act, 2019", content)
-        self.assertIn("Scan Website URL", content)
-        self.assertIn("Paste Policy / Contract Text", content)
+        self.assertIn("Scan URL", content)
+        self.assertIn("Upload File", content)
+        self.assertIn("Paste Text", content)
 
     def test_health_endpoint(self):
         """Verifies GET /health returns JSON."""
@@ -179,7 +180,7 @@ class TestFlaskRoutes(unittest.TestCase):
         # May be 200 or 503 depending on database connection
         self.assertIn(response.status_code, [200, 503])
         data = response.get_json()
-        self.assertEqual(data["service"], "Kenyan ODPC Compliance Auditor SaaS")
+        self.assertEqual(data["service"], "SeraGuard - Kenyan ODPC Compliance Auditor SaaS")
 
 
 if __name__ == "__main__":

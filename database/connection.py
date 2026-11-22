@@ -13,22 +13,50 @@ from pgvector.psycopg import register_vector
 from dotenv import load_dotenv
 
 # Load environment variables
-load_dotenv()
+load_dotenv(override=True)
 
 logger = logging.getLogger(__name__)
 
-# Fetch database URL from environment
-DATABASE_URL = os.getenv(
-    "DATABASE_URL", 
-    "postgresql://postgres:postgres@localhost:5432/odpc_compliance"
-)
+
+def get_database_url(conn_str: Optional[str] = None) -> str:
+    """
+    Retrieves and normalizes the database connection URL.
+    Handles 'postgres://' -> 'postgresql://' conversion (common in Railway/Supabase).
+    Ensures 'sslmode=require' is attached for remote Supabase poolers.
+    """
+    raw_url = conn_str or os.getenv(
+        "DATABASE_URL", 
+        "postgresql://postgres:postgres@localhost:5432/odpc_compliance"
+    )
+    clean_url = raw_url.strip()
+
+    # Normalize protocol from legacy postgres:// to postgresql://
+    if clean_url.startswith("postgres://"):
+        clean_url = "postgresql://" + clean_url[len("postgres://"):]
+
+    # For remote cloud databases (e.g. Supabase), ensure SSL is required
+    is_local = any(h in clean_url for h in ("localhost", "127.0.0.1", "0.0.0.0"))
+    if not is_local and "sslmode=" not in clean_url:
+        separator = "&" if "?" in clean_url else "?"
+        clean_url = f"{clean_url}{separator}sslmode=require"
+
+    return clean_url
 
 
 def get_connection_kwargs() -> dict:
-    """Returns standard connection parameters for psycopg."""
+    """
+    Returns standard connection parameters for psycopg (v3).
+    Includes TCP keepalives and connect timeouts to keep Supabase Session
+    Pooler connections healthy and prevent hung workers on Railway.
+    """
     return {
         "row_factory": dict_row,
-        "autocommit": False
+        "autocommit": False,
+        "connect_timeout": 10,
+        "keepalives": 1,
+        "keepalives_idle": 30,
+        "keepalives_interval": 10,
+        "keepalives_count": 5
     }
 
 
@@ -42,7 +70,8 @@ def create_connection(conn_str: Optional[str] = None) -> psycopg.Connection:
     Returns:
         psycopg.Connection: Configured connection with vector support registered.
     """
-    target_url = conn_str or DATABASE_URL
+    target_url = get_database_url(conn_str)
+    safe_host = target_url.split("@")[-1].split("?")[0] if "@" in target_url else "configured host"
     try:
         conn = psycopg.connect(target_url, **get_connection_kwargs())
         # Register pgvector type handlers with this connection
@@ -56,10 +85,10 @@ def create_connection(conn_str: Optional[str] = None) -> psycopg.Connection:
             )
         return conn
     except Exception as e:
-        logger.error("Failed to connect to PostgreSQL database: %s", e)
+        logger.error("Failed to connect to PostgreSQL database (%s): %s", safe_host, e)
         raise ConnectionError(
-            f"Could not connect to PostgreSQL database at {target_url.split('@')[-1] if '@' in target_url else target_url}. "
-            f"Please verify DATABASE_URL in your .env file or Supabase project settings. Details: {e}"
+            f"Could not connect to PostgreSQL database at {safe_host}. "
+            f"Please verify DATABASE_URL in your Railway / Supabase project settings. Details: {e}"
         ) from e
 
 

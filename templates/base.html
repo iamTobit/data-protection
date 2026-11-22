@@ -1,9 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}ODPC Compliance Auditor | Kenyan Data Protection Act 2019 SaaS{% endblock %}</title>
+    <title>{% block title %}SeraGuard | Kenyan ODPC Compliance Auditor & Data Protection Act 2019 SaaS{% endblock %}
+    </title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -31,6 +33,7 @@
             background: linear-gradient(90deg, #000000 0%, #990000 35%, #006600 70%, #006600 100%);
             height: 4px;
         }
+
         .blur-locked {
             filter: blur(6px);
             user-select: none;
@@ -39,6 +42,7 @@
     </style>
     {% block extra_head %}{% endblock %}
 </head>
+
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans antialiased">
     <!-- Top National Stripe -->
     <div class="kenya-stripe"></div>
@@ -48,13 +52,15 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
             <div class="flex items-center space-x-3">
                 <a href="/" class="flex items-center space-x-2 text-slate-900 group">
-                    <div class="w-10 h-10 rounded-lg bg-emerald-700 flex items-center justify-center text-white shadow-sm group-hover:bg-emerald-800 transition">
+                    <div
+                        class="w-10 h-10 rounded-lg bg-emerald-700 flex items-center justify-center text-white shadow-sm group-hover:bg-emerald-800 transition">
                         <i data-lucide="shield-check" class="w-6 h-6"></i>
                     </div>
                     <div>
                         <div class="font-bold text-lg leading-tight flex items-center gap-1.5">
-                            ODPC Auditor
-                            <span class="text-xs bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded-full border border-emerald-200">Kenya</span>
+                            SeraGuard
+                            <span
+                                class="text-xs bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded-full border border-emerald-200">Kenya</span>
                         </div>
                         <p class="text-xs text-slate-500 font-medium">Data Protection Act 2019 SaaS</p>
                     </div>
@@ -62,13 +68,16 @@
             </div>
 
             <nav class="flex items-center space-x-4">
-                <a href="/" class="text-sm font-medium text-slate-600 hover:text-emerald-700 transition flex items-center gap-1">
+                <a href="/"
+                    class="text-sm font-medium text-slate-600 hover:text-emerald-700 transition flex items-center gap-1">
                     <i data-lucide="scan" class="w-4 h-4"></i> New Audit
                 </a>
-                <a href="#how-it-works" class="hidden md:inline-flex text-sm font-medium text-slate-600 hover:text-emerald-700 transition">
+                <a href="#how-it-works"
+                    class="hidden md:inline-flex text-sm font-medium text-slate-600 hover:text-emerald-700 transition">
                     ODPC Regulations
                 </a>
-                <div class="hidden sm:flex items-center text-xs bg-slate-100 text-slate-600 px-3 py-1.5 rounded-md border border-slate-200">
+                <div
+                    class="hidden sm:flex items-center text-xs bg-slate-100 text-slate-600 px-3 py-1.5 rounded-md border border-slate-200">
                     <span class="w-2 h-2 rounded-full bg-emerald-500 mr-2"></span>
                     <span>BAAI/bge-small-en-v1.5 (384d)</span>
                 </div>
@@ -79,14 +88,16 @@
     <!-- Flash Messages -->
     <div class="max-w-4xl mx-auto px-4 mt-4 w-full">
         {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="p-4 mb-3 rounded-lg text-sm flex items-start gap-3 shadow-sm {% if category == 'error' %}bg-red-50 text-red-800 border border-red-200{% else %}bg-emerald-50 text-emerald-800 border border-emerald-200{% endif %}">
-                        <i data-lucide="{% if category == 'error' %}alert-circle{% else %}check-circle{% endif %}" class="w-5 h-5 flex-shrink-0 mt-0.5"></i>
-                        <span class="flex-1">{{ message }}</span>
-                    </div>
-                {% endfor %}
-            {% endif %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div
+            class="p-4 mb-3 rounded-lg text-sm flex items-start gap-3 shadow-sm {% if category == 'error' %}bg-red-50 text-red-800 border border-red-200{% else %}bg-emerald-50 text-emerald-800 border border-emerald-200{% endif %}">
+            <i data-lucide="{% if category == 'error' %}alert-circle{% else %}check-circle{% endif %}"
+                class="w-5 h-5 flex-shrink-0 mt-0.5"></i>
+            <span class="flex-1">{{ message }}</span>
+        </div>
+        {% endfor %}
+        {% endif %}
         {% endwith %}
     </div>
 
@@ -102,16 +113,28 @@
                 <div class="md:col-span-2">
                     <div class="flex items-center space-x-2 text-white font-bold text-base mb-3">
                         <i data-lucide="shield-check" class="w-5 h-5 text-emerald-400"></i>
-                        <span>Kenyan ODPC Compliance Auditor</span>
+                        <span>SeraGuard</span>
                     </div>
                     <p class="text-xs text-slate-400 leading-relaxed mb-4 max-w-md">
                         Automated regulatory compliance evaluation engine for businesses operating in Kenya.
-                        Audits enterprise Privacy Policies and contracts against the <strong>Kenya Data Protection Act, 2019</strong>, 
-                        the <strong>Data Protection (General) Regulations, 2021</strong>, and ODPC enforcement guidelines.
+                        Audits enterprise Privacy Policies and contracts against the <strong>Kenya Data Protection Act,
+                            2019</strong>,
+                        the <strong>Data Protection (General) Regulations, 2021</strong>, and ODPC enforcement
+                        guidelines.
                     </p>
-                    <div class="flex items-center space-x-2 text-xs text-slate-400">
-                        <span class="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
-                        <span>Official ODPC Recourse Channel: <a href="mailto:complaints@odpc.go.ke" class="text-emerald-400 hover:underline">complaints@odpc.go.ke</a></span>
+                    <div class="space-y-1.5 text-xs text-slate-400">
+                        <div class="flex items-center space-x-2">
+                            <span class="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
+                            <span>Direct Support: <a href="mailto:support@seraguard.co.ke"
+                                    class="text-emerald-400 hover:underline">support@seraguard.co.ke</a> &bull;
+                                WhatsApp: <a href="https://wa.me/254720467087" target="_blank"
+                                    class="text-emerald-400 hover:underline">+254 720 467 087</a></span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <span class="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
+                            <span>Official ODPC Recourse: <a href="mailto:complaints@odpc.go.ke"
+                                    class="text-emerald-400 hover:underline">complaints@odpc.go.ke</a></span>
+                        </div>
                     </div>
                 </div>
 
@@ -130,7 +153,9 @@
                 <div>
                     <h4 class="text-white font-semibold text-xs tracking-wider uppercase mb-3">ODPC Penalties</h4>
                     <p class="text-xs text-slate-400 leading-relaxed mb-3">
-                        Under Section 63 of the Act, non-compliant entities face statutory fines up to <strong class="text-amber-400">KES 5,000,000</strong> or 1% of annual turnover, plus director liability.
+                        Under Section 63 of the Act, non-compliant entities face statutory fines up to <strong
+                            class="text-amber-400">KES 5,000,000</strong> or 1% of annual turnover, plus director
+                        liability.
                     </p>
                     <div class="text-xs text-slate-400">
                         Unlocked via Lipa Na M-Pesa (KES 1,000).
@@ -138,9 +163,20 @@
                 </div>
             </div>
 
-            <div class="border-t border-slate-800 mt-8 pt-6 flex flex-col sm:flex-row justify-between items-center text-xs text-slate-400">
-                <p>&copy; 2026 Kenyan ODPC Compliance Auditor SaaS. All rights reserved.</p>
-                <p class="mt-2 sm:mt-0 text-slate-400">Independent legal tech tool. Not affiliated with or endorsed by the Office of the Data Protection Commissioner.</p>
+            <div
+                class="border-t border-slate-800 mt-8 pt-6 flex flex-col sm:flex-row justify-between items-center text-xs text-slate-400 gap-4">
+                <p>&copy; 2026 SeraGuard. All rights reserved. Registered in Nairobi, Kenya.</p>
+                <div class="flex items-center space-x-4">
+                    <a href="/privacy-policy" class="hover:text-emerald-400 transition underline">Privacy Policy</a>
+                    <a href="/terms" class="hover:text-emerald-400 transition underline">Terms of Service</a>
+                </div>
+            </div>
+            <div
+                class="mt-4 pt-3 border-t border-slate-800/60 text-[11px] text-slate-400 leading-relaxed text-center sm:text-left">
+                <strong>Legal Disclaimer:</strong> This audit report and draft policy are AI-assisted compliance
+                readiness tools aligned with the Kenya Data Protection Act, 2019, and do not constitute formal legal
+                advice or representation. Organizations should review and tailor policies with a qualified Advocate of
+                the High Court of Kenya.
             </div>
         </div>
     </footer>
@@ -151,4 +187,5 @@
     </script>
     {% block extra_scripts %}{% endblock %}
 </body>
+
 </html>
