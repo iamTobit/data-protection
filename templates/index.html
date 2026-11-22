@@ -388,31 +388,27 @@ Users cannot delete their records or withdraw consent while their mobile applica
         overlay.classList.remove("hidden");
 
         const steps = [
-            "Connecting to business website / policy source...",
             "Crawling policy text & extracting disclosures...",
-            "Decoding contact details & identifying legal entity...",
+            "Computing 384-dimensional BGE embeddings...",
+            "Executing pgvector cosine distance search in legal_chunks...",
             "Auditing against Section 25 Principles & Section 32 Consent...",
             "Checking Section 37 Direct Marketing & 72-Hour Breach rules...",
-            "Analyzing Cross-Border Data Transfers (Sections 48 & 49)...",
-            "Evaluating Data Subject Rights (Access, Erasure, Portability)...",
             "Compiling ODPC compliance verdict & teaser report..."
         ];
 
         let i = 0;
-        let progress = 18;
         const textEl = document.getElementById("scan-step-text");
         const barEl = document.getElementById("progress-bar-inner");
-        if (barEl) barEl.style.width = `${progress}%`;
 
         const interval = setInterval(() => {
-            i = (i + 1) % steps.length;
-            if (textEl) textEl.innerText = steps[i];
-            if (barEl && progress < 92) {
-                progress += Math.floor(Math.random() * 8) + 4;
-                if (progress > 92) progress = 92;
-                barEl.style.width = `${progress}%`;
+            i++;
+            if (i < steps.length) {
+                textEl.innerText = steps[i];
+                barEl.style.width = `${((i + 1) / steps.length) * 100}%`;
+            } else {
+                clearInterval(interval);
             }
-        }, 1100);
+        }, 1200);
     }
 
     // Auto-switch to Paste tab if previous scan was blocked by an anti-bot challenge

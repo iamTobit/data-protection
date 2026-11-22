@@ -180,14 +180,6 @@ def save_audit_report(
 
 def fetch_audit_report(report_id: str) -> dict:
     """Retrieves an audit report by its UUID."""
-    if not report_id:
-        return None
-    try:
-        uuid.UUID(str(report_id))
-    except (ValueError, AttributeError):
-        logger.warning("Invalid UUID format for report_id: %s", report_id)
-        return None
-
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -507,42 +499,32 @@ def download_report_policy(audit_id, file_format):
         return redirect(url_for("view_report", audit_id=audit_id))
 
 
-@app.route("/api/pay/stk-push", methods=["POST"])
 @app.route("/api/pay/<audit_id>", methods=["POST"])
-def initiate_payment_endpoint(audit_id=None):
+def initiate_payment_endpoint(audit_id):
     """
     Triggers an M-Pesa STK Push prompt for KES 1,000 to the user's phone.
-    Supports /api/pay/<audit_id> and /api/pay/stk-push (with audit_id in body).
     """
     try:
-        data = request.get_json(silent=True) or request.form or {}
-        effective_audit_id = audit_id or data.get("audit_id")
-        if not effective_audit_id:
-            return jsonify({"success": False, "error": "Audit ID is required."}), 400
-
-        report = fetch_audit_report(effective_audit_id)
+        report = fetch_audit_report(audit_id)
         if not report:
             return jsonify({"success": False, "error": "Audit report not found."}), 404
 
         if report.get("is_paid") and report.get("mpesa_receipt_number"):
             return jsonify({"success": True, "message": "Report is already unlocked!", "is_paid": True})
 
+        data = request.get_json() or request.form
         phone_number = data.get("phone_number", "").strip()
+
         if not phone_number:
             return jsonify({"success": False, "error": "Phone number is required."}), 400
 
-        # Validate phone number format before hitting Daraja
-        clean_phone = re.sub(r'[\s\-\+\(\)]', '', phone_number)
-        if not (re.match(r'^(?:254|\+254|0)?([17]\d{8})$', clean_phone) or (clean_phone.isdigit() and len(clean_phone) in (9, 10, 12))):
-            return jsonify({"success": False, "error": f"Invalid Kenyan mobile phone number '{phone_number}'. Must be a valid Safaricom/Airtel format (e.g., 0712345678 or 254712345678)."}), 400
-
         # Initiate Daraja STK Push
-        account_ref = f"ODPC-{str(effective_audit_id)[:8]}"
+        account_ref = f"ODPC-{audit_id[:8]}"
         stk_result = initiate_stk_push(
             phone_number=phone_number,
             amount=REPORT_PRICE,
             account_ref=account_ref,
-            audit_id=effective_audit_id
+            audit_id=audit_id
         )
 
         if not stk_result.get("success"):
@@ -564,7 +546,7 @@ def initiate_payment_endpoint(audit_id=None):
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = %s::uuid;
                     """,
-                    (checkout_id, phone_number, effective_audit_id)
+                    (checkout_id, phone_number, audit_id)
                 )
 
         return jsonify({
@@ -709,7 +691,6 @@ def simulate_sandbox_payment(audit_id):
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-@app.route("/privacy")
 @app.route("/privacy-policy")
 def privacy_policy_page():
     """Renders the application's own Privacy Notice."""
