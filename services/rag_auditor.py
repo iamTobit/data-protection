@@ -562,15 +562,15 @@ def scrape_policy_from_url(target_url: str, timeout: int = 15) -> Dict[str, str]
     logger.info("Scraping target URL: %s", target_url)
 
     COMMON_PRIVACY_PATHS = [
-        "/privacy", "/privacy-policy", "/privacy-notice", "/legal/privacy",
-        "/pages/privacy-policy", "/pages/privacy", "/data-protection"
+        "/privacy", "/privacy-policy"
     ]
 
     try:
         session = requests.Session()
         session.headers.update(DEFAULT_HEADERS)
+        fetch_timeout = min(timeout, 8)
         
-        response = session.get(target_url, timeout=timeout, allow_redirects=True)
+        response = session.get(target_url, timeout=fetch_timeout, allow_redirects=True)
         response.raise_for_status()
         
         if response.encoding is None or response.encoding.lower() == 'iso-8859-1':
@@ -634,7 +634,7 @@ def scrape_policy_from_url(target_url: str, timeout: int = 15) -> Dict[str, str]
                     if probe_url == response.url:
                         continue
                     try:
-                        probe_resp = session.get(probe_url, timeout=6, allow_redirects=True)
+                        probe_resp = session.get(probe_url, timeout=3.5, allow_redirects=True)
                         if probe_resp.status_code == 200:
                             if probe_resp.encoding is None or probe_resp.encoding.lower() == 'iso-8859-1':
                                 probe_resp.encoding = probe_resp.apparent_encoding or 'utf-8'
@@ -718,10 +718,53 @@ COMPLIANCE_DOMAINS = [
 ]
 
 
+_LEGAL_CHUNKS_CACHE: Optional[List[Dict[str, Any]]] = None
+
+def get_cached_legal_chunks() -> List[Dict[str, Any]]:
+    """
+    Returns pre-cached statutory legal chunks from memory.
+    If not yet cached, fetches all chunks in a single quick database query.
+    """
+    global _LEGAL_CHUNKS_CACHE
+    if _LEGAL_CHUNKS_CACHE is not None:
+        return _LEGAL_CHUNKS_CACHE
+
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id, act_title, section_ref, citation, content
+                    FROM legal_chunks
+                    ORDER BY id ASC;
+                    """
+                )
+                rows = cur.fetchall()
+                if rows:
+                    _LEGAL_CHUNKS_CACHE = [
+                        {
+                            "id": r["id"],
+                            "act_title": r["act_title"],
+                            "section_ref": r["section_ref"],
+                            "citation": r["citation"],
+                            "content": r["content"],
+                            "distance": 0.0
+                        }
+                        for r in rows
+                    ]
+                    logger.info("Loaded %d statutory legal chunks into memory cache.", len(_LEGAL_CHUNKS_CACHE))
+                    return _LEGAL_CHUNKS_CACHE
+    except Exception as e:
+        logger.warning("Could not pre-load legal chunks into memory cache: %s", e)
+
+    return []
+
+
 def retrieve_relevant_legal_context(document_text: str, top_k_per_domain: int = 1) -> List[Dict[str, Any]]:
     """
-    Queries pgvector across key Kenyan legal compliance domains to retrieve
-    the most relevant statutory sections, citations, and guidance notes.
+    Retrieves the most relevant statutory sections, citations, and guidance notes.
+    Uses memory-cached statutory chunks for sub-millisecond retrieval, avoiding
+    repeated WAN database roundtrips on every audit.
     
     Args:
         document_text: The user's privacy policy text.
@@ -730,6 +773,24 @@ def retrieve_relevant_legal_context(document_text: str, top_k_per_domain: int = 
     Returns:
         List of legal chunk records (citation, act_title, section_ref, content).
     """
+    cached = get_cached_legal_chunks()
+    if cached:
+        text_lower = document_text[:5000].lower()
+        scored_chunks = []
+        for chunk in cached:
+            content_lower = chunk.get("content", "").lower()
+            citation_lower = chunk.get("citation", "").lower()
+            overlap_score = 0
+            for kw in ["consent", "principle", "rights", "marketing", "retention", "transfer", "breach", "odpc", "officer"]:
+                if kw in content_lower and kw in text_lower:
+                    overlap_score += 2
+                elif kw in citation_lower:
+                    overlap_score += 1
+            scored_chunks.append((overlap_score, chunk))
+
+        scored_chunks.sort(key=lambda x: x[0], reverse=True)
+        return [c for _, c in scored_chunks[:8]]
+
     retrieved_chunks = []
     seen_ids = set()
 

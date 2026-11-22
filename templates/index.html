@@ -393,22 +393,27 @@ Users cannot delete their records or withdraw consent while their mobile applica
             "Executing pgvector cosine distance search in legal_chunks...",
             "Auditing against Section 25 Principles & Section 32 Consent...",
             "Checking Section 37 Direct Marketing & 72-Hour Breach rules...",
-            "Compiling ODPC compliance verdict & teaser report..."
+            "Evaluating Cross-Border Transfer & Section 33 Children's rules...",
+            "Checking DPO designation, ODPC registration & complaint procedures...",
+            "Compiling ODPC compliance verdict & executive assessment..."
         ];
 
-        let i = 0;
+        let stepIndex = 0;
+        let progressPercent = 15;
         const textEl = document.getElementById("scan-step-text");
         const barEl = document.getElementById("progress-bar-inner");
 
+        if (textEl) textEl.innerText = steps[0];
+        if (barEl) barEl.style.width = "15%";
+
         const interval = setInterval(() => {
-            i++;
-            if (i < steps.length) {
-                textEl.innerText = steps[i];
-                barEl.style.width = `${((i + 1) / steps.length) * 100}%`;
-            } else {
-                clearInterval(interval);
+            stepIndex = (stepIndex + 1) % steps.length;
+            if (textEl) textEl.innerText = steps[stepIndex];
+            if (barEl && progressPercent < 92) {
+                progressPercent += 11;
+                barEl.style.width = `${Math.min(progressPercent, 92)}%`;
             }
-        }, 1200);
+        }, 1100);
     }
 
     // Auto-switch to Paste tab if previous scan was blocked by an anti-bot challenge
