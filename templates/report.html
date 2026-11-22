@@ -684,7 +684,7 @@ endblock %}
                 </button>
 
                 <!-- Sandbox Instant Simulation Helper (Only rendered in sandbox mode) -->
-                {% if mpesa_env == 'sandbox' %}
+                {% if show_sandbox %}
                 <div class="mt-4 pt-3 border-t border-slate-100 text-center">
                     <button type="button" onclick="triggerSimulatedPayment()"
                         class="text-xs text-slate-500 hover:text-emerald-700 underline font-medium">
@@ -714,7 +714,7 @@ endblock %}
                     <span>Awaiting Safaricom confirmation...</span>
                 </div>
 
-                {% if mpesa_env == 'sandbox' %}
+                {% if show_sandbox %}
                 <div class="mt-6">
                     <button type="button" onclick="triggerSimulatedPayment()"
                         class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-lg border border-slate-200 font-semibold transition">
