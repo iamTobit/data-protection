@@ -439,8 +439,7 @@ def view_report(audit_id):
             all_violations=violations_all,
             compliant_rewrite=full_compliant_draft,
             compliant_rewrite_html=compliant_rewrite_html,
-            report_price=REPORT_PRICE,
-            mpesa_env=(os.getenv("MPESA_ENV") or os.getenv("MPESA_ENVIRONMENT") or "production").strip().lower()
+            report_price=REPORT_PRICE
         )
     except Exception as e:
         logger.exception("Error rendering report %s: %s", audit_id, e)
@@ -665,19 +664,7 @@ def simulate_sandbox_payment(audit_id):
     """
     Sandbox / Test Helper: Simulates an immediate successful M-Pesa confirmation
     for testing the unlock flow locally without live Safaricom credentials.
-    Strictly forbidden in production environments!
     """
-    mpesa_env = (os.getenv("MPESA_ENV") or os.getenv("MPESA_ENVIRONMENT") or "production").strip().lower()
-    if mpesa_env != "sandbox":
-        logger.warning(
-            "Security block: simulated payment attempt in non-sandbox environment ('%s') for audit %s",
-            mpesa_env, audit_id
-        )
-        return jsonify({
-            "success": False,
-            "error": "Payment simulation is disabled in production. Please complete payment via Lipa Na M-Pesa Online."
-        }), 403
-
     try:
         simulated_receipt = f"SHG{datetime.now().strftime('%d%H%M%S')}AA"
         with get_db_connection() as conn:

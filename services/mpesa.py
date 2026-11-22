@@ -22,7 +22,7 @@ SANDBOX_BASE_URL = "https://sandbox.safaricom.co.ke"
 PRODUCTION_BASE_URL = "https://api.safaricom.co.ke"
 
 # Configuration
-MPESA_ENV = (os.getenv("MPESA_ENV") or os.getenv("MPESA_ENVIRONMENT") or "sandbox").strip().lower()
+MPESA_ENV = os.getenv("MPESA_ENVIRONMENT", "sandbox").strip().lower()
 CONSUMER_KEY = os.getenv("MPESA_CONSUMER_KEY", "").strip()
 CONSUMER_SECRET = os.getenv("MPESA_CONSUMER_SECRET", "").strip()
 PASSKEY = os.getenv(
@@ -37,14 +37,8 @@ def get_callback_url() -> str:
     """
     Returns the M-Pesa STK push callback URL dynamically from environment variables.
     Ensures no hardcoded localhost or ngrok URLs are used in production.
-    Automatically normalizes to include the /api/mpesa/callback route.
     """
-    raw_url = os.getenv("MPESA_CALLBACK_URL", "").strip()
-    if not raw_url:
-        return ""
-    if not raw_url.endswith("/api/mpesa/callback"):
-        raw_url = raw_url.rstrip("/") + "/api/mpesa/callback"
-    return raw_url
+    return os.getenv("MPESA_CALLBACK_URL", "").strip()
 
 # In-memory access token cache: (token, expiry_timestamp)
 _TOKEN_CACHE: Tuple[Optional[str], float] = (None, 0.0)
