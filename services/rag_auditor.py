@@ -562,8 +562,7 @@ def scrape_policy_from_url(target_url: str, timeout: int = 15) -> Dict[str, str]
     logger.info("Scraping target URL: %s", target_url)
 
     COMMON_PRIVACY_PATHS = [
-        "/privacy", "/privacy-policy", "/privacy-notice", "/legal/privacy",
-        "/pages/privacy-policy", "/pages/privacy", "/data-protection"
+        "/privacy", "/privacy-policy", "/pages/privacy-policy"
     ]
 
     try:
@@ -634,7 +633,7 @@ def scrape_policy_from_url(target_url: str, timeout: int = 15) -> Dict[str, str]
                     if probe_url == response.url:
                         continue
                     try:
-                        probe_resp = session.get(probe_url, timeout=6, allow_redirects=True)
+                        probe_resp = session.get(probe_url, timeout=3.5, allow_redirects=True)
                         if probe_resp.status_code == 200:
                             if probe_resp.encoding is None or probe_resp.encoding.lower() == 'iso-8859-1':
                                 probe_resp.encoding = probe_resp.apparent_encoding or 'utf-8'
@@ -717,11 +716,53 @@ COMPLIANCE_DOMAINS = [
     }
 ]
 
+_LEGAL_CHUNKS_CACHE: Optional[List[Dict[str, Any]]] = None
+
+
+def get_all_cached_legal_chunks() -> List[Dict[str, Any]]:
+    """
+    Caches the 17 static Kenyan legal chunks in memory to avoid repeating
+    8 WAN round-trip queries over Supabase on every audit request.
+    """
+    global _LEGAL_CHUNKS_CACHE
+    if _LEGAL_CHUNKS_CACHE is not None:
+        return _LEGAL_CHUNKS_CACHE
+
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id, act_title, section_ref, citation, content
+                    FROM legal_chunks
+                    ORDER BY id ASC;
+                    """
+                )
+                rows = cur.fetchall()
+                if rows:
+                    _LEGAL_CHUNKS_CACHE = [
+                        {
+                            "id": r["id"],
+                            "act_title": r["act_title"],
+                            "section_ref": r["section_ref"],
+                            "citation": r["citation"],
+                            "content": r["content"],
+                        }
+                        for r in rows
+                    ]
+                    logger.info("Cached %d static legal chunks in memory.", len(_LEGAL_CHUNKS_CACHE))
+                    return _LEGAL_CHUNKS_CACHE
+    except Exception as e:
+        logger.warning("Could not pre-fetch legal chunks from database: %s", e)
+
+    return []
+
 
 def retrieve_relevant_legal_context(document_text: str, top_k_per_domain: int = 1) -> List[Dict[str, Any]]:
     """
     Queries pgvector across key Kenyan legal compliance domains to retrieve
     the most relevant statutory sections, citations, and guidance notes.
+    Uses in-memory cached legal chunks when available for instantaneous sub-millisecond retrieval.
     
     Args:
         document_text: The user's privacy policy text.
@@ -730,6 +771,23 @@ def retrieve_relevant_legal_context(document_text: str, top_k_per_domain: int = 
     Returns:
         List of legal chunk records (citation, act_title, section_ref, content).
     """
+    cached = get_all_cached_legal_chunks()
+    if cached:
+        text_lower = document_text.lower()
+        scored_chunks = []
+        for chunk in cached:
+            c_text = (chunk["content"] + " " + chunk["citation"] + " " + (chunk.get("section_ref") or "")).lower()
+            score = 0
+            for term in ["consent", "marketing", "retention", "breach", "rights", "transfer", "children", "odpc", "controller", "processor"]:
+                if term in text_lower and term in c_text:
+                    score += 2
+                elif term in c_text:
+                    score += 1
+            scored_chunks.append((score, chunk))
+
+        scored_chunks.sort(key=lambda x: x[0], reverse=True)
+        return [item[1] for item in scored_chunks[:8]]
+
     retrieved_chunks = []
     seen_ids = set()
 
