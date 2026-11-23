@@ -76,10 +76,12 @@ def safe_extract_json(raw_text: str) -> Dict[str, Any]:
     raise ValueError(f"Could not parse valid JSON from LLM response: {clean[:200]}...")
 
 
-def condense_head_tail(text: str, head_chars: int = 4500, tail_chars: int = 4000) -> str:
+def condense_head_tail(text: str, head_chars: int = 6000, tail_chars: int = 4500) -> str:
     """
     Condenses long text by preserving head and tail portions while condensing the middle.
     Returns text untouched if len(text) <= head_chars + tail_chars.
+    Standard threshold is 10,500 chars (~2,600 tokens), allowing full 10k policies
+    (such as SeraGuard's full notice) to pass to Groq without any middle truncation.
     """
     if not text:
         return ""
@@ -296,7 +298,7 @@ class LLMGateway:
                 if is_gemini:
                     doc_slice = document_text[:45000]
                 else:
-                    doc_slice = condense_head_tail(document_text, 4500, 4000)
+                    doc_slice = condense_head_tail(document_text, 6000, 4500)
 
                 if "{document_text}" in user_content:
                     prompt_text = user_content.replace("{document_text}", doc_slice)

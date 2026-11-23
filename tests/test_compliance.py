@@ -342,10 +342,49 @@ class TestRAGAuditor(unittest.TestCase):
             for g in gaps:
                 self.assertEqual(g["severity"], "Medium")
 
-    def test_audit_cache_version_is_v10(self):
-        """Verifies AUDIT_CACHE_VERSION is bumped to v10 in app.py."""
+    def test_audit_cache_version_is_v11(self):
+        """Verifies AUDIT_CACHE_VERSION is bumped to v11 in app.py."""
         import app as flask_app
-        self.assertEqual(flask_app.AUDIT_CACHE_VERSION, "v10")
+        self.assertEqual(flask_app.AUDIT_CACHE_VERSION, "v11")
+
+    def test_html_table_preservation_in_clean_html_text(self):
+        """Verifies HTML table rows with short cells are preserved as pipe-separated text."""
+        from services.rag_auditor import clean_html_text
+        html = """
+        <html><body>
+            <h2>6. Data Retention Schedules</h2>
+            <table>
+                <tr><th>Category</th><th>Period</th><th>Rationale</th></tr>
+                <tr><td>Tax records</td><td>7 years</td><td>KRA obligation</td></tr>
+                <tr><td>Audit logs</td><td>90 days</td><td>Download access</td></tr>
+                <tr><td>Security logs</td><td>30 days</td><td>Abuse mitigation</td></tr>
+                <tr><td>Analytics</td><td>Indefinitely</td><td>Anonymised macro trends</td></tr>
+            </table>
+        </body></html>
+        """
+        cleaned = clean_html_text(html)
+        self.assertIn("7 years", cleaned)
+        self.assertIn("90 days", cleaned)
+        self.assertIn("30 days", cleaned)
+        self.assertIn("Tax records | 7 years | KRA obligation", cleaned)
+
+    def test_ignore_indefinitely_when_data_anonymised(self):
+        """Verifies indefinitely is ignored when data is explicitly anonymised."""
+        from services.rag_auditor import _audit_with_heuristics
+        policy_text = """
+        Privacy Notice of DataCorp Ltd.
+        Contact: privacy@datacorp.co.ke, Nairobi, Kenya.
+        We process customer account data. Retention periods:
+        Tax records are kept for 7 years. Security logs are retained for 30 days.
+        Aggregated, anonymised analytics are kept indefinitely as they contain no personal data.
+        You may opt-out of marketing free of charge at any time. ODPC recourse at Britam Tower.
+        """
+        report = _audit_with_heuristics(policy_text, [], "DataCorp Ltd")
+        retention_crit = next(c for c in report["core_criteria"] if c["key"] == "retention_schedule")
+        self.assertEqual(retention_crit["status"], "PASS")
+        self.assertEqual(retention_crit["score"], 10)
+        retention_violation = next((v for v in report["violations"] if "retention" in v["title"].lower()), None)
+        self.assertIsNone(retention_violation)
 
     @patch("services.rag_auditor.GEMINI_API_KEY", "test-gemini-key")
     @patch("services.rag_auditor.LLM_PROVIDER", "openai")
