@@ -220,7 +220,7 @@ SeraGuard evaluates policies against the 10 statutory pillars of Kenyan data pro
   * Lists basic rights (access, correction) but omits data portability or automated decision objection.
   * Mentions marketing opt-out without specifying a cost-free 48-hour execution window.
   * Mentions cloud hosting/servers without referencing Standard Contractual Clauses (SCCs).
-  * Provides a contact email/phone without naming an official Data Protection Officer (DPO).
+  * Provides a general contact email/phone without naming a designated DPO (where DPO is mandatory under Section 24).
 - **`FAIL` (0 points):** The topic is **100% absent** from the entire document.
 - **`N/A`:** Excluded from both numerator and denominator (e.g. cross-border transfers for purely local non-cloud operations).
 

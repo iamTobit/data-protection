@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}ODPC Compliance Assessment: {{ report.target_url_or_name }} ({{ risk_level }} Risk) | SeraGuard{%
-endblock %}
+{% block title %}ODPC Compliance Assessment: {{ target_display_name or (full_report.entity_name if full_report is defined and full_report else report.target_url_or_name) }} ({{ risk_level }} Risk) | SeraGuard{% endblock %}
 
 {% block extra_head %}
 <!-- Prevent public search engine indexing of private organization compliance findings -->
@@ -195,7 +194,7 @@ endblock %}
                 <span>HIGH RISK: Significant Statutory Gaps Under Kenya DPA 2019</span>
             </div>
             <span class="text-xs font-semibold bg-red-700/80 px-2.5 py-1 rounded-full border border-red-500">Section 63
-                Exposure: Up to KES 5,000,000</span>
+                Exposure: Up to KES 5M or 1% annual turnover (whichever is lower)</span>
         </div>
         {% elif risk_level == 'Medium' %}
         <div class="bg-amber-600 text-white px-6 py-3 flex items-center justify-between">
@@ -225,7 +224,7 @@ endblock %}
                     <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Target Entity /
                         Source</span>
                     <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 break-all">{{
-                        report.target_url_or_name }}</h1>
+                        target_display_name or (full_report.entity_name if full_report is defined and full_report else report.target_url_or_name) }}</h1>
                     <p class="text-xs text-slate-500 mt-1 flex items-center gap-2">
                         <span>Evaluated against: <strong>Kenya Data Protection Act, 2019</strong> & <strong>ODPC General
                                 Regulations 2021</strong></span>
@@ -599,7 +598,8 @@ endblock %}
                 <p class="text-xs sm:text-sm text-slate-600 max-w-lg mb-4 leading-relaxed">
                     Instantly replace your non-compliant policy with an ODPC-aligned compliance draft tailored
                     specifically for your business operations.
-                    Includes DPO appointment clauses, ODPC complaint channels, statutory retention schedules, and direct
+                    Includes DPO appointment clauses (where mandatory under Section 24), ODPC complaint channels,
+                    statutory retention schedules, and direct
                     marketing safeguards.
                 </p>
                 <button onclick="openMpesaModal()"
@@ -820,6 +820,13 @@ endblock %}
 
     // Simulated payment for development/testing
     async function triggerSimulatedPayment() {
+        const simBtns = document.querySelectorAll('button[onclick*="triggerSimulatedPayment"]');
+        simBtns.forEach(b => {
+            b.disabled = true;
+            b.dataset.origText = b.innerText;
+            b.innerText = "Unlocking & Drafting Policy...";
+        });
+
         try {
             const resp = await fetch(`/api/pay/simulate-sandbox/${AUDIT_ID}`, {
                 method: "POST"
@@ -829,9 +836,17 @@ endblock %}
                 window.location.reload();
             } else {
                 alert("Simulation failed: " + data.error);
+                simBtns.forEach(b => {
+                    b.disabled = false;
+                    if (b.dataset.origText) b.innerText = b.dataset.origText;
+                });
             }
         } catch (err) {
             alert("Simulation error: " + err.message);
+            simBtns.forEach(b => {
+                b.disabled = false;
+                if (b.dataset.origText) b.innerText = b.dataset.origText;
+            });
         }
     }
 

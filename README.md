@@ -228,7 +228,7 @@ The report view reveals:
 | **Section 39** | Retention | Storage limitation. Vague "as long as necessary" phrases violate Kenyan law. Explicit schedules required. |
 | **Section 43** | Breach Notification | Mandatory notification of personal data breaches to the ODPC within **72 hours**. |
 | **Section 48** | Cross-Border Transfer | Transfers outside Kenya require proof of appropriate safeguards, adequacy, or explicit consent. |
-| **Section 63** | Penalties & Fines | Statutory penalties up to **KES 5,000,000** or 1% of annual turnover, plus director liability. |
+| **Section 63** | Penalties & Fines | Statutory penalties up to **KES 5,000,000 or 1% of the preceding financial year's annual turnover, whichever is lower**, plus director liability. |
 
 ---
 

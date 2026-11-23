@@ -23,6 +23,7 @@ from services.rag_auditor import (
     run_compliance_audit,
     extract_text_from_file,
     is_terms_of_service,
+    check_bot_wall_or_insufficient_content,
     format_policy_html,
     strip_markdown_for_text,
     generate_policy_pdf
@@ -44,7 +45,7 @@ logging.basicConfig(
 logger = logging.getLogger("odpc_auditor_app")
 
 # Audit Cache Version: bump to automatically invalidate stale cached scores across deployments
-AUDIT_CACHE_VERSION = os.getenv("AUDIT_CACHE_VERSION", "v3").strip()
+AUDIT_CACHE_VERSION = os.getenv("AUDIT_CACHE_VERSION", "v10").strip()
 
 app = Flask(__name__)
 # Secret key for session signing: prefer FLASK_SECRET_KEY, fallback to SECRET_KEY
@@ -167,6 +168,15 @@ def save_audit_report(
     if isinstance(full_rep, dict):
         full_rep["cache_version"] = AUDIT_CACHE_VERSION
         full_rep["input_hash"] = input_hash
+        clean_entity = full_rep.get("entity_name")
+        if clean_entity and clean_entity.lower() not in ["the organization", "unknown"]:
+            if (
+                re.search(r'\.(pdf|docx|doc|txt)$', target_url_or_name, re.IGNORECASE)
+                or "uploaded policy" in target_url_or_name.lower()
+                or "submitted policy" in target_url_or_name.lower()
+                or ("appendix" in target_url_or_name.lower() and clean_entity.lower() in target_url_or_name.lower())
+            ):
+                target_url_or_name = clean_entity
 
     with get_db_connection() as conn:
         with conn.cursor() as cur:
@@ -187,15 +197,16 @@ def save_audit_report(
                 (
                     target_url_or_name,
                     raw_input_text,
-                    audit_result["risk_level"],
-                    json.dumps(audit_result["teaser_summary"]),
+                    audit_result.get("risk_level", "Medium"),
+                    json.dumps(audit_result.get("teaser_summary", {})),
                     json.dumps(full_rep),
-                    audit_result["compliant_rewrite"]
+                    audit_result.get("compliant_rewrite", "")
                 )
             )
             row = cur.fetchone()
-            report_id = str(row["id"])
-            logger.info("Saved new audit report: %s (Risk: %s, CacheHash: %s...)", report_id, audit_result["risk_level"], input_hash[:8])
+            report_id = str(row["id"]) if isinstance(row, dict) else str(row[0])
+            risk = audit_result.get("risk_level", "Medium")
+            logger.info("Saved new audit report: %s (Risk: %s, CacheHash: %s...)", report_id, risk, input_hash[:8])
             return report_id
 
 
@@ -244,7 +255,7 @@ def generate_ondemand_policy_for_audit(audit_id: str) -> Optional[str]:
             return None
 
         existing_rewrite = report.get("compliant_rewrite", "")
-        if existing_rewrite and len(existing_rewrite) > 800 and not existing_rewrite.startswith("# ODPC-COMPLIANT PRIVACY POLICY\n**Governed"):
+        if existing_rewrite and len(existing_rewrite.strip()) > 200 and not existing_rewrite.startswith("# ODPC-COMPLIANT PRIVACY POLICY\n**Governed"):
             return existing_rewrite
 
         raw_text = report.get("raw_input_text", "")
@@ -268,6 +279,10 @@ def generate_ondemand_policy_for_audit(audit_id: str) -> Optional[str]:
             fallback_draft=fallback_draft,
             sector_info=sector_info
         )
+
+        if not bespoke_draft or len(bespoke_draft.strip()) == 0:
+            logger.warning("Bespoke draft returned empty for audit %s; retaining existing draft.", audit_id)
+            return existing_rewrite or fallback_draft
 
         with get_db_connection() as conn:
             with conn.cursor() as cur:
@@ -343,6 +358,13 @@ def run_audit_endpoint():
             page_title = (scrape_res.get("title") or "").strip()
             source_label = f"{page_title} | {target_url}" if page_title else target_url
 
+            bot_err = check_bot_wall_or_insufficient_content(document_text)
+            if bot_err:
+                if request.is_json:
+                    return jsonify({"success": False, "error": bot_err}), 400
+                flash(bot_err, "error")
+                return redirect(url_for("index"))
+
         # Option 2: File Upload (.pdf, .docx, .txt)
         elif scan_type == "file":
             uploaded_file = request.files.get("policy_file")
@@ -415,9 +437,18 @@ def run_audit_endpoint():
             target_url_or_name=source_label
         )
 
+        clean_entity_name = (
+            audit_result.get("full_report", {}).get("entity_name")
+            or audit_result.get("teaser_summary", {}).get("entity_name")
+        )
+        if not entity_name and clean_entity_name and clean_entity_name.strip().lower() not in ["the organization", "unknown"]:
+            final_target_name = clean_entity_name.strip()
+        else:
+            final_target_name = source_label
+
         # Store in PostgreSQL database
         report_id = save_audit_report(
-            target_url_or_name=source_label,
+            target_url_or_name=final_target_name,
             raw_input_text=document_text,
             audit_result=audit_result
         )
@@ -522,9 +553,17 @@ def view_report(audit_id):
 
         mpesa_env = (os.getenv("MPESA_ENV") or os.getenv("MPESA_ENVIRONMENT") or "production").strip().lower()
 
+        target_display_name = (
+            (full_report.get("entity_name") if isinstance(full_report, dict) else None)
+            or report.get("target_url_or_name")
+            or "Organization Privacy Policy"
+        )
+
         return render_template(
             "report.html",
             report=report,
+            full_report=full_report,
+            target_display_name=target_display_name,
             audit_id=audit_id,
             is_paid=is_paid,
             requires_redraft=requires_redraft,
@@ -575,7 +614,15 @@ def download_report_policy(audit_id, file_format):
             flash("Policy draft content is empty.", "error")
             return redirect(url_for("view_report", audit_id=audit_id))
 
-        org_name = report.get("target_url_or_name", "Organization").strip()
+        full_report = report.get("full_report") or {}
+        if isinstance(full_report, str):
+            try:
+                full_report = json.loads(full_report)
+            except Exception:
+                full_report = {}
+
+        clean_entity = full_report.get("entity_name") or report.get("target_url_or_name", "Organization")
+        org_name = clean_entity.strip()
         safe_org = re.sub(r'[^\w\-]', '_', org_name)[:30]
 
         fmt = file_format.lower()
@@ -786,6 +833,15 @@ def simulate_sandbox_payment(audit_id):
         return jsonify({"error": "Disabled in production"}), 403
 
     try:
+        report = fetch_audit_report(audit_id)
+        if report and report.get("is_paid") and report.get("compliant_rewrite") and len(str(report.get("compliant_rewrite", "")).strip()) > 200:
+            logger.info("Report %s is already paid and unlocked. Returning existing confirmation.", audit_id)
+            return jsonify({
+                "success": True,
+                "message": "Report already unlocked",
+                "receipt": report.get("mpesa_receipt_number")
+            }), 200
+
         simulated_receipt = f"SHG{datetime.now().strftime('%d%H%M%S')}AA"
         with get_db_connection() as conn:
             with conn.cursor() as cur:

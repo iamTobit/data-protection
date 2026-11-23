@@ -24,7 +24,9 @@ from services.rag_auditor import (
     _deterministic_384d_embedding, 
     generate_embedding,
     _audit_with_heuristics, 
-    create_teaser_summary
+    create_teaser_summary,
+    extract_clean_entity_and_domain,
+    get_candidate_llm_targets
 )
 import app as flask_app_module
 
@@ -154,6 +156,424 @@ class TestRAGAuditor(unittest.TestCase):
         self.assertIsNotNone(teaser["unlocked_first_violation"])
         self.assertTrue(teaser["locked_count"] >= 2)
 
+    def test_extract_clean_entity_and_domain_filename_noise(self):
+        """Verifies filenames with Appendix and codes don't become fake domains."""
+        filename = "Kabu 13010.Appendix I Kabarak University Data Privacy Statement (1).pdf"
+        entity, domain = extract_clean_entity_and_domain(filename, "Kabarak University collects student records. Contact: info@kabarak.ac.ke")
+        self.assertEqual(entity, "Kabarak University")
+        self.assertEqual(domain, "kabarak.ac.ke")
+        self.assertNotIn("13010", domain)
+        self.assertNotIn("appendix", domain)
+
+    def test_extract_clean_entity_and_domain_naked_url(self):
+        """Verifies naked domain or clean URL extraction."""
+        entity, domain = extract_clean_entity_and_domain("https://aarhospital.com/privacy-policy")
+        self.assertEqual(domain, "aarhospital.com")
+        self.assertIn("Aarhospital", entity)
+
+    def test_section_63_exact_wording_and_conditional_dpo(self):
+        """Verifies Section 63 contains 'whichever is lower' and DPO is conditional under Section 24."""
+        non_compliant_text = """
+        Privacy Policy of BetaShop Kenya.
+        We access your contacts and send you daily promotional SMS without opt-out.
+        """
+        report = _audit_with_heuristics(non_compliant_text, [], "BetaShop Kenya")
+        # Section 63 exact statutory wording test
+        self.assertIn("whichever is lower", report["executive_summary"])
+        self.assertIn("5,000,000", report["executive_summary"])
+        self.assertNotIn("whichever is higher", report["executive_summary"])
+
+        # Conditional DPO test
+        rights_violation = next((v for v in report["violations"] if "Incomplete Enumeration" in v.get("title", "")), None)
+        self.assertIsNotNone(rights_violation)
+        self.assertIn("where mandatory under Section 24", rights_violation["recommended_fix"])
+
+    @patch("services.rag_auditor.GEMINI_API_KEY", "test-gemini-key")
+    @patch("services.rag_auditor.LLM_PROVIDER", "gemini")
+    def test_multi_provider_gemini_priority(self):
+        """Verifies Gemini is prioritized when LLM_PROVIDER=gemini."""
+        import services.rag_auditor as rag
+        targets = rag.get_candidate_llm_targets()
+        self.assertTrue(len(targets) > 0)
+        self.assertEqual(targets[0]["provider"], "gemini")
+        self.assertEqual(targets[0]["model"], "gemini-3.5-flash")
+        self.assertEqual(targets[0]["api_key"], "test-gemini-key")
+        self.assertIn("googleapis.com", targets[0]["base_url"])
+
+    @patch("services.rag_auditor.GEMINI_API_KEY", "test-gemini-key")
+    @patch("services.rag_auditor.LLM_PROVIDER", "openai")
+    @patch("services.rag_auditor.LLM_API_KEY", "test-groq-key")
+    def test_multi_provider_gemini_fallback(self):
+        """Verifies Gemini is included as fallback with trailing slash."""
+        import services.rag_auditor as rag
+        targets = rag.get_candidate_llm_targets()
+        models = [t["model"] for t in targets]
+        self.assertIn("gemini-3.5-flash", models)
+        self.assertIn("gemini-3.8-flash", models)
+        self.assertIn("gemini-3.5-flash-lite", models)
+        gemini_targets = [t for t in targets if t["provider"] == "gemini"]
+        self.assertTrue(len(gemini_targets) >= 1)
+        for gt in gemini_targets:
+            self.assertTrue(gt["base_url"].endswith("/"), f"Gemini base_url must end with trailing slash: {gt['base_url']}")
+            self.assertEqual(gt["base_url"], "https://generativelanguage.googleapis.com/v1beta/openai/")
+
+    def test_unedited_template_placeholders_detection(self):
+        """Verifies raw [Insert ...] placeholders downgrade Criterion 1 to FAIL (0 pts) and add High gap."""
+        policy_with_placeholders = """
+        Privacy Notice of EMA Advocates. Located in Nairobi, Kenya.
+        Contact us at [Insert Email Address] or phone [Insert Phone Number].
+        We process client legal data under advocate service contracts. We do not transfer overseas.
+        """
+        report = _audit_with_heuristics(policy_with_placeholders, [], "EMA Advocates")
+        crit_1 = next((c for c in report["core_criteria"] if c["key"] == "data_controller_identity"), None)
+        self.assertIsNotNone(crit_1)
+        self.assertEqual(crit_1["status"], "FAIL")
+        self.assertEqual(crit_1["score"], 0)
+        placeholder_violation = next((v for v in report["violations"] if "Placeholder" in v["title"]), None)
+        self.assertIsNotNone(placeholder_violation)
+        self.assertEqual(placeholder_violation["severity"], "High")
+        self.assertTrue(report["overall_score"] <= 65)
+
+    def test_determine_risk_level_standardization(self):
+        """Verifies deterministic risk_level calculation overrides loose labels based on score and severity."""
+        from services.rag_auditor import determine_risk_level
+
+        # >= 85 and zero Critical/High gaps -> Low
+        self.assertEqual(determine_risk_level(85, []), "Low")
+        self.assertEqual(determine_risk_level(95, [{"severity": "Medium"}, {"severity": "Low"}]), "Low")
+
+        # >= 85 with a High gap -> Medium
+        self.assertEqual(determine_risk_level(90, [{"severity": "High"}]), "Medium")
+        self.assertEqual(determine_risk_level(95, [{"severity": "Low"}, {"severity": "High"}]), "Medium")
+
+        # >= 85 with a Critical gap -> Medium (capped at Medium)
+        self.assertEqual(determine_risk_level(95, [{"severity": "Critical"}]), "Medium")
+
+        # 55 <= score <= 84 -> Strictly Medium (regardless of Critical or High gaps)
+        self.assertEqual(determine_risk_level(55, []), "Medium")
+        self.assertEqual(determine_risk_level(84, []), "Medium")
+        self.assertEqual(determine_risk_level(70, [{"severity": "Medium"}]), "Medium")
+        self.assertEqual(determine_risk_level(70, [{"severity": "High"}]), "Medium")
+        self.assertEqual(determine_risk_level(67, [{"severity": "Critical"}]), "Medium")
+        self.assertEqual(determine_risk_level(70, [{"severity": "Critical"}]), "Medium")
+
+        # < 55 -> High (always)
+        self.assertEqual(determine_risk_level(54, []), "High")
+        self.assertEqual(determine_risk_level(30, [{"severity": "Low"}]), "High")
+        self.assertEqual(determine_risk_level(0, []), "High")
+
+    def test_save_audit_report_uses_clean_entity_over_noisy_filename(self):
+        """Verifies save_audit_report saves clean entity name instead of raw noisy filename."""
+        import app as flask_app
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
+        mock_cursor.fetchone.return_value = {"id": "mock-uuid-1234"}
+        mock_cm = MagicMock()
+        mock_cm.__enter__.return_value = mock_conn
+        mock_cm.__exit__.return_value = False
+
+        with patch("app.get_db_connection", return_value=mock_cm):
+            # Test when target is a raw PDF filename with Appendix noise
+            raw_filename = "Kabu 13010.Appendix I Kabarak University Data Privacy Statement (1).pdf"
+            audit_result = {
+                "risk_level": "Medium",
+                "compliant_rewrite": "# Compliant Draft",
+                "full_report": {
+                    "entity_name": "Kabarak University",
+                    "domain": "kabarak.ac.ke",
+                    "overall_score": 75,
+                    "violations": []
+                },
+                "teaser_summary": {
+                    "entity_name": "Kabarak University"
+                }
+            }
+            flask_app.save_audit_report(raw_filename, "Sample policy text for Kabarak", audit_result)
+            
+            # Check what target_url_or_name was passed to INSERT
+            self.assertTrue(mock_cursor.execute.called)
+            execute_args = mock_cursor.execute.call_args[0]
+            inserted_params = execute_args[1]
+            saved_target_name = inserted_params[0]
+            self.assertEqual(saved_target_name, "Kabarak University")
+
+    def test_auto_convert_unrepresented_partial_fail_criteria_to_gaps(self):
+        """Verifies unrepresented FAIL/PARTIAL criteria are converted to Medium gap cards when gaps < 2 and score < 90."""
+        from services.rag_auditor import run_compliance_audit
+
+        mock_llm_report = {
+            "overall_score": 75,
+            "core_criteria": [
+                {
+                    "key": "data_controller_identity",
+                    "name": "Data Controller Identity & Physical Address (Sec 24, 29)",
+                    "status": "PASS",
+                    "score": 10,
+                    "finding": "Identity provided."
+                },
+                {
+                    "key": "retention_schedule",
+                    "name": "Concrete Data Retention Schedule & Disposal (Sec 39, Reg 19)",
+                    "status": "PARTIAL",
+                    "score": 5,
+                    "finding": "General retention language used without concrete statutory periods."
+                },
+                {
+                    "key": "children_data_protection",
+                    "name": "Protection of Minors & Age 18 Verification (Sec 33)",
+                    "status": "PARTIAL",
+                    "score": 5,
+                    "finding": "Missing age verification safeguards."
+                }
+            ],
+            "violations": []
+        }
+
+        sample_doc = "This is a valid privacy policy document for Test Org that meets the minimum length requirement for compliance auditing under Kenyan DPA."
+        with patch("services.rag_auditor._audit_with_llm", return_value=mock_llm_report), \
+             patch("services.rag_auditor.get_candidate_llm_targets", return_value=[{"model": "test"}]):
+            res = run_compliance_audit(sample_doc, "Test Org")
+            full_rep = res["full_report"]
+            gaps = full_rep.get("violations", [])
+            self.assertGreaterEqual(len(gaps), 2)
+            self.assertTrue(any("Retention" in g["title"] for g in gaps))
+            self.assertTrue(any("Minors" in g["title"] or "Children" in g["title"] for g in gaps))
+            for g in gaps:
+                self.assertEqual(g["severity"], "Medium")
+
+    def test_audit_cache_version_is_v10(self):
+        """Verifies AUDIT_CACHE_VERSION is bumped to v10 in app.py."""
+        import app as flask_app
+        self.assertEqual(flask_app.AUDIT_CACHE_VERSION, "v10")
+
+    @patch("services.rag_auditor.GEMINI_API_KEY", "test-gemini-key")
+    @patch("services.rag_auditor.LLM_PROVIDER", "openai")
+    @patch("services.rag_auditor.LLM_API_KEY", "test-groq-key")
+    def test_smart_length_based_provider_routing(self):
+        """Verifies documents > 9000 chars route to Gemini first, while shorter docs route to Groq first."""
+        import services.rag_auditor as rag
+        # Normal length doc (<= 9000 chars) -> Groq is first
+        short_targets = rag.get_candidate_llm_targets(text_length=5000)
+        self.assertEqual(short_targets[0]["provider"], "groq/openai")
+
+        # Long multi-page doc (> 9000 chars) -> Gemini is prioritized FIRST due to 1M token context
+        long_targets = rag.get_candidate_llm_targets(text_length=15000)
+        self.assertEqual(long_targets[0]["provider"], "gemini")
+        self.assertEqual(long_targets[0]["model"], "gemini-3.5-flash")
+
+    def test_clean_html_text_with_trafilatura(self):
+        """Verifies clean_html_text strips nav/footer bloat and appends JSON-LD metadata."""
+        from services.rag_auditor import clean_html_text
+        sample_html = """
+        <html>
+        <head>
+          <script type="application/ld+json">
+          {"name": "Kenya Tech Ltd", "telephone": "+254700111222", "address": "Westlands, Nairobi"}
+          </script>
+        </head>
+        <body>
+          <nav><a href="/">Home</a> <a href="/cart">Cart (3)</a> <a href="/shop">Products</a></nav>
+          <main>
+            <h1>Privacy Notice</h1>
+            <p>Kenya Tech Ltd processes customer personal data under the Kenya Data Protection Act 2019.</p>
+            <p>We collect names, emails, and phone numbers to fulfill orders and communicate with users.</p>
+            <p>Data subjects have rights under Section 26 to access, correct, or delete personal data.</p>
+            <p>Complaints can be lodged with the ODPC at Britam Tower, Nairobi under Section 56.</p>
+            <p>We implement strict encryption and security safeguards pursuant to Section 43.</p>
+            <p>Data retention is limited to 7 years in compliance with statutory financial and tax obligations.</p>
+          </main>
+          <footer><p>Copyright 2026. All rights reserved.</p></footer>
+        </body>
+        </html>
+        """
+        extracted = clean_html_text(sample_html)
+        self.assertNotIn("Cart (3)", extracted)
+        self.assertIn("Kenya Tech Ltd", extracted)
+        self.assertIn("Westlands, Nairobi", extracted)
+        self.assertIn("Section 26", extracted)
+
+    def test_bot_wall_guard_and_insufficient_content(self):
+        """Verifies check_bot_wall_or_insufficient_content flags short text and anti-bot walls."""
+        from services.rag_auditor import check_bot_wall_or_insufficient_content
+        # Short text (< 350 chars)
+        self.assertIsNotNone(check_bot_wall_or_insufficient_content("Short policy text."))
+        # Bot wall challenges
+        radware_html = "<html><body><h1>Verifying your browser</h1><p>Radware Bot Protection</p></body></html>"
+        self.assertIsNotNone(check_bot_wall_or_insufficient_content("A" * 400, radware_html))
+        cloudflare_text = "Enable JavaScript and cookies to continue. " + ("A" * 400)
+        self.assertIsNotNone(check_bot_wall_or_insufficient_content(cloudflare_text))
+        # Valid text
+        valid_text = "Valid Privacy Policy text under Kenya Data Protection Act 2019. " * 15
+        self.assertIsNone(check_bot_wall_or_insufficient_content(valid_text, "<html><body>...</body></html>"))
+
+    @patch("services.rag_auditor.GEMINI_API_KEY", "")
+    @patch("services.rag_auditor.LLM_API_KEY", "fake-key")
+    @patch("openai.OpenAI")
+    def test_audit_with_llm_chunk_and_token_capping(self, mock_openai_cls):
+        """Verifies _audit_with_llm caps at top 8 legal chunks, uses Head+Tail smart sampling on Groq, max_tokens=3400, and reasoning_effort=medium."""
+        from services.rag_auditor import _audit_with_llm
+        from unittest.mock import MagicMock
+
+        # Create mock client and response
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.choices = [
+            MagicMock(message=MagicMock(content='{"overall_score": 85, "core_criteria": [], "violations": []}'))
+        ]
+        mock_client.chat.completions.create.return_value = mock_response
+        mock_openai_cls.return_value = mock_client
+
+        # Create 17 fake chunks with distances
+        chunks = [
+            {"id": i, "act_title": "DPA 2019", "section_ref": f"Sec {i}", "citation": f"Citation {i}", "content": f"Content {i}", "distance": 0.05 * i}
+            for i in range(1, 18)
+        ]
+        long_text = "HEAD_" + ("A" * 6000) + "_MIDDLE_" + ("Z" * 5000) + "_TAIL"  # > 11,000 chars
+
+        _audit_with_llm(long_text, chunks, "Test Corp", "test.co.ke")
+
+        self.assertTrue(mock_client.chat.completions.create.called)
+        call_kwargs = mock_client.chat.completions.create.call_args[1]
+        self.assertEqual(call_kwargs["max_tokens"], 3400)
+        self.assertEqual(call_kwargs["temperature"], 0.0)
+        self.assertEqual(call_kwargs.get("reasoning_effort"), "medium")
+
+        # Inspect the user prompt passed to the model
+        messages = call_kwargs["messages"]
+        user_msg = next(m["content"] for m in messages if m["role"] == "user")
+        
+        # Verify only 8 chunks were included
+        citation_count = user_msg.count("--- Citation")
+        self.assertEqual(citation_count, 8)
+
+        # Verify Groq uses Head + Tail sampling preserving both HEAD and TAIL
+        policy_section = user_msg.split("<policy_text>")[-1].split("</policy_text>")[0].strip()
+        self.assertIn("HEAD_", policy_section)
+        self.assertIn("_TAIL", policy_section)
+        self.assertIn("MIDDLE SECTIONS CONDENSED", policy_section)
+
+    @patch("services.rag_auditor.GEMINI_API_KEY", "test-gemini-key")
+    @patch("services.rag_auditor.LLM_PROVIDER", "openai")
+    @patch("services.rag_auditor.LLM_API_KEY", "fake-key")
+    @patch("openai.OpenAI")
+    def test_audit_with_llm_gemini_full_text(self, mock_openai_cls):
+        """Verifies Gemini receives full text without slicing on long documents."""
+        from services.rag_auditor import _audit_with_llm
+        from unittest.mock import MagicMock
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.choices = [
+            MagicMock(message=MagicMock(content='{"overall_score": 95, "core_criteria": [], "violations": []}'))
+        ]
+        mock_client.chat.completions.create.return_value = mock_response
+        mock_openai_cls.return_value = mock_client
+
+        # 15,000 char document
+        full_text = ("Kabarak University Privacy Policy. " * 450).strip()
+        self.assertTrue(len(full_text) > 9000)
+
+        _audit_with_llm(full_text, [], "Kabarak University", "kabarak.ac.ke")
+
+        call_kwargs = mock_client.chat.completions.create.call_args[1]
+        # Should call Gemini first with 8192 max_tokens and JSON mode
+        self.assertEqual(call_kwargs["model"], "gemini-3.5-flash")
+        self.assertEqual(call_kwargs["max_tokens"], 8192)
+        self.assertEqual(call_kwargs["response_format"], {"type": "json_object"})
+        user_msg = next(m["content"] for m in call_kwargs["messages"] if m["role"] == "user")
+        policy_section = user_msg.split("<policy_text>")[-1].split("</policy_text>")[0].strip()
+        # Full text was passed without condensing
+        self.assertNotIn("MIDDLE SECTIONS CONDENSED", policy_section)
+        self.assertEqual(len(policy_section), len(full_text))
+
+    @patch("services.rag_auditor.GEMINI_API_KEY", "test-gemini-key")
+    @patch("services.rag_auditor.LLM_PROVIDER", "openai")
+    @patch("services.rag_auditor.LLM_API_KEY", "fake-key")
+    @patch("openai.OpenAI")
+    def test_gemini_503_immediate_failover_to_secondary_gemini_model_with_full_text(self, mock_openai_cls):
+        """Verifies 503 on primary model fails over immediately to secondary 1M-context model with FULL text and zero sleep."""
+        from services.rag_auditor import _audit_with_llm
+        from unittest.mock import MagicMock
+
+        mock_client = MagicMock()
+        err_503 = Exception("Error code: 503 - High Demand")
+        setattr(err_503, "status_code", 503)
+
+        mock_success = MagicMock()
+        mock_success.choices = [
+            MagicMock(message=MagicMock(content='{"overall_score": 92, "core_criteria": [], "violations": []}'))
+        ]
+
+        # Call 1: gemini-3.5-flash -> 503
+        # Call 2: immediately gemini-3.5-flash-lite -> SUCCESS (zero sleep delay!)
+        mock_client.chat.completions.create.side_effect = [err_503, mock_success]
+        mock_openai_cls.return_value = mock_client
+
+        # 42,000 char document
+        full_text = ("Kabarak University Detailed Privacy Policy Statement. " * 800).strip()
+        self.assertTrue(len(full_text) > 40000)
+
+        result = _audit_with_llm(full_text, [], "Kabarak University", "kabarak.ac.ke")
+
+        self.assertEqual(result["overall_score"], 92)
+        self.assertEqual(mock_client.chat.completions.create.call_count, 2)
+
+        # Call 1 was gemini-3.5-flash
+        call1_kwargs = mock_client.chat.completions.create.call_args_list[0][1]
+        self.assertEqual(call1_kwargs["model"], "gemini-3.5-flash")
+        self.assertEqual(call1_kwargs["max_tokens"], 8192)
+        self.assertEqual(call1_kwargs["response_format"], {"type": "json_object"})
+
+        # Call 2 was gemini-3.5-flash-lite
+        call2_kwargs = mock_client.chat.completions.create.call_args_list[1][1]
+        self.assertEqual(call2_kwargs["model"], "gemini-3.5-flash-lite")
+        self.assertEqual(call2_kwargs["max_tokens"], 8192)
+        self.assertEqual(call2_kwargs["response_format"], {"type": "json_object"})
+
+        # Crucial: verify full 42,000+ chars were passed without any condensing!
+        user_msg = next(m["content"] for m in call2_kwargs["messages"] if m["role"] == "user")
+        policy_section = user_msg.split("<policy_text>")[-1].split("</policy_text>")[0].strip()
+        self.assertNotIn("MIDDLE SECTIONS CONDENSED", policy_section)
+        self.assertEqual(len(policy_section), len(full_text))
+
+    @patch("services.rag_auditor.LLM_API_KEY", "fake-key")
+    @patch("openai.OpenAI")
+    def test_no_duplicate_placeholder_when_section_29_present(self, mock_openai_cls):
+        """Verifies placeholder note is merged into existing Section 29 / Controller Identity gap without creating a duplicate."""
+        from services.rag_auditor import _audit_with_llm
+        from unittest.mock import MagicMock
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.choices = [
+            MagicMock(message=MagicMock(content="""{
+                "overall_score": 70,
+                "core_criteria": [{"key": "data_controller_identity", "status": "FAIL", "score": 0}],
+                "violations": [
+                    {
+                        "id": 1,
+                        "title": "Incomplete Data Controller Identity Disclosures",
+                        "severity": "High",
+                        "citation": "Kenya Data Protection Act, 2019, Section 29",
+                        "explanation": "Controller physical address is omitted.",
+                        "recommended_fix": "Provide registered office address."
+                    }
+                ]
+            }"""))
+        ]
+        mock_client.chat.completions.create.return_value = mock_response
+        mock_openai_cls.return_value = mock_client
+
+        text_with_brackets = "Privacy Notice [Insert Email Address] [Physical Address]. Contact us."
+        report = _audit_with_llm(text_with_brackets, [], "Test Org")
+
+        # Must have only 1 violation, not 2
+        self.assertEqual(len(report["violations"]), 1)
+        v = report["violations"][0]
+        self.assertIn("Section 29", v["citation"])
+        self.assertIn("placeholders", v["explanation"].lower())
+
 
 class TestSectorProfilingAndDynamicRedraft(unittest.TestCase):
     """Test context-aware sector profiling and tailored non-bloated policy redrafting."""
@@ -266,6 +686,74 @@ class TestFlaskRoutes(unittest.TestCase):
         self.assertIn(response.status_code, [200, 503])
         data = response.get_json()
         self.assertEqual(data["service"], "SeraGuard - Kenyan ODPC Compliance Auditor SaaS")
+
+    @patch("app.fetch_audit_report")
+    def test_view_report_renders_without_undefined_error(self, mock_fetch):
+        """Verifies GET /report/<id> renders 200 without Jinja2 UndefinedError for full_report."""
+        mock_fetch.return_value = {
+            "id": "mock-uuid-test",
+            "target_url_or_name": "Test Organization",
+            "risk_level": "Medium",
+            "is_paid": False,
+            "mpesa_receipt_number": None,
+            "teaser_summary": {"entity_name": "Test Organization"},
+            "full_report": {
+                "entity_name": "Test Organization",
+                "overall_score": 75,
+                "executive_summary": "Test summary",
+                "violations": [
+                    {
+                        "id": 1,
+                        "title": "Missing DPO Contact",
+                        "severity": "High",
+                        "citation": "Section 24",
+                        "explanation": "No contact details.",
+                        "recommended_fix": "Appoint DPO"
+                    }
+                ]
+            },
+            "compliant_rewrite": ""
+        }
+        response = self.client.get("/report/mock-uuid-test")
+        self.assertEqual(response.status_code, 200)
+        content = response.data.decode("utf-8")
+        self.assertIn("Test Organization", content)
+
+    @patch("services.rag_auditor.GEMINI_API_KEY", "test-gemini-key")
+    @patch("services.rag_auditor.LLM_API_KEY", "test-groq-key")
+    @patch("services.rag_auditor.LLM_PROVIDER", "openai")
+    def test_llm_gateway_timeout_failover(self, *mocks):
+        """Verifies LLMGateway catches APITimeoutError and fails over to subsequent candidates."""
+        from services.llm_gateway import LLMGateway
+        from openai import APITimeoutError
+        gateway = LLMGateway(groq_api_key="test-groq", gemini_api_key="test-gemini")
+
+        call_count = 0
+        def mock_create(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                # First model times out
+                raise APITimeoutError("Request timed out after 15.0s")
+            # Fallback model succeeds
+            mock_choice = MagicMock()
+            mock_choice.message.content = json.dumps({"overall_score": 80, "violations": []})
+            mock_resp = MagicMock()
+            mock_resp.choices = [mock_choice]
+            return mock_resp
+
+        with patch("openai.OpenAI") as mock_openai_cls:
+            mock_client = MagicMock()
+            mock_openai_cls.return_value = mock_client
+            mock_client.chat.completions.create.side_effect = mock_create
+
+            long_doc = "A" * 10000
+            result, model = gateway.generate_json("System prompt", "User prompt", document_text=long_doc)
+            self.assertEqual(result["overall_score"], 80)
+            self.assertGreaterEqual(call_count, 2)
+            call_kwargs = mock_openai_cls.call_args[1]
+            self.assertEqual(call_kwargs.get("timeout"), 15.0)
+            self.assertEqual(call_kwargs.get("max_retries"), 0)
 
 
 if __name__ == "__main__":
