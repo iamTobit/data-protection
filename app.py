@@ -44,7 +44,7 @@ logging.basicConfig(
 logger = logging.getLogger("odpc_auditor_app")
 
 # Audit Cache Version: bump to automatically invalidate stale cached scores across deployments
-AUDIT_CACHE_VERSION = os.getenv("AUDIT_CACHE_VERSION", "v2").strip()
+AUDIT_CACHE_VERSION = os.getenv("AUDIT_CACHE_VERSION", "v3").strip()
 
 app = Flask(__name__)
 # Secret key for session signing: prefer FLASK_SECRET_KEY, fallback to SECRET_KEY
@@ -251,18 +251,22 @@ def generate_ondemand_policy_for_audit(audit_id: str) -> Optional[str]:
         clean_entity = full_report.get("entity_name") or "The Organization"
         clean_domain = full_report.get("domain") or "company.co.ke"
 
-        from services.rag_auditor import retrieve_relevant_legal_context, generate_compliant_policy_with_llm
+        from services.rag_auditor import retrieve_relevant_legal_context, generate_compliant_policy_with_llm, detect_operational_sector
         legal_chunks = retrieve_relevant_legal_context(raw_text)
         fallback_draft = full_report.get("compliant_policy_draft") or ""
+        sector_info = full_report.get("sector_info")
+        if not sector_info:
+            sector_info = detect_operational_sector(clean_entity, clean_domain, raw_text, report.get("target_url_or_name", ""))
 
-        logger.info("Generating ON-DEMAND bespoke replacement policy for paid audit %s (%s)...", audit_id, clean_entity)
+        logger.info("Generating ON-DEMAND bespoke replacement policy for paid audit %s (%s, Sector: %s)...", audit_id, clean_entity, sector_info.get("sector"))
         bespoke_draft = generate_compliant_policy_with_llm(
             document_text=raw_text,
             entity_name=clean_entity,
             domain=clean_domain,
             violations=violations,
             legal_chunks=legal_chunks,
-            fallback_draft=fallback_draft
+            fallback_draft=fallback_draft,
+            sector_info=sector_info
         )
 
         with get_db_connection() as conn:

@@ -155,6 +155,91 @@ class TestRAGAuditor(unittest.TestCase):
         self.assertTrue(teaser["locked_count"] >= 2)
 
 
+class TestSectorProfilingAndDynamicRedraft(unittest.TestCase):
+    """Test context-aware sector profiling and tailored non-bloated policy redrafting."""
+
+    def test_education_sector_profiling_and_redraft(self):
+        """Verifies high school detection and zero e-commerce/fintech junk in redraft."""
+        from services.rag_auditor import detect_operational_sector, generate_static_policy_draft, _audit_with_heuristics
+
+        text = (
+            "Alliance Girls High School Privacy Notice. P.O. Box 123 Nairobi, Kenya. "
+            "We collect student academic progress, learner admission records, KCSE registration, "
+            "parent emergency phone numbers (0712345678), and school fee receipts via M-Pesa. "
+            "Student personal data is processed pursuant to the Basic Education Act. "
+            "Parental consent is obtained at admission for all minors under 18 pursuant to Section 33. "
+            "Medical emergency records are kept by the school nurse under Section 44. "
+            "Retention: academic certificates permanent, student files 7 years. "
+            "72-hour breach notification to ODPC under Section 43. "
+            "ODPC complaints can be sent to complaints@odpc.go.ke at Britam Tower, Nairobi. "
+            "We uphold principles of data minimisation and accuracy under Section 25. "
+            "Data subject rights of access, correction, erasure, portability, objection honored within 30 days."
+        )
+        sector_info = detect_operational_sector("Alliance Girls High School", "alliancegirls.sc.ke", text)
+        self.assertEqual(sector_info["sector"], "education")
+        self.assertTrue(sector_info["has_minors"])
+
+        # Verify heuristic audit marks non-commercial direct marketing as N/A
+        audit_res = _audit_with_heuristics(text, [], "Alliance Girls High School", "alliancegirls.sc.ke", sector_info)
+        marketing_crit = [c for c in audit_res["core_criteria"] if c["key"] == "direct_marketing_opt_out"][0]
+        self.assertEqual(marketing_crit["status"], "N/A")
+        self.assertEqual(marketing_crit["score"], 10)
+        self.assertGreaterEqual(audit_res["overall_score"], 90)
+
+        # Verify static draft has education focus and zero retail/cart junk
+        draft = generate_static_policy_draft("Alliance Girls High School", "alliancegirls.sc.ke", "privacy@alliancegirls.sc.ke", sector_info)
+        self.assertIn("EDUCATION SECTOR", draft)
+        self.assertIn("Learner & Student Academic Data", draft)
+        self.assertNotIn("shopping cart", draft.lower())
+        self.assertNotIn("dispatch rider", draft.lower())
+        self.assertNotIn("credit scoring", draft.lower())
+
+    def test_healthcare_sector_profiling_and_redraft(self):
+        """Verifies clinic/hospital detection and Section 44 medical confidentiality in redraft."""
+        from services.rag_auditor import detect_operational_sector, generate_static_policy_draft
+
+        text = (
+            "AAR Health Clinic Nairobi. We collect patient demographics, next-of-kin, medical history, "
+            "clinical consultation records, laboratory diagnostic results, prescriptions, and SHA / insurance "
+            "billing details under Section 44 of the Kenya Data Protection Act 2019 for healthcare care. "
+            "Confidential patient records are retained for 10 years pursuant to Ministry of Health guidelines. "
+            "We do not sell patient data for commercial marketing. Section 43 breach notifications are made within 72 hours. "
+            "Contact ODPC at Britam Tower, Nairobi."
+        )
+        sector_info = detect_operational_sector("AAR Health Clinic Nairobi", "aarhealthcare.com", text)
+        self.assertEqual(sector_info["sector"], "healthcare")
+        self.assertTrue(sector_info["has_health_data"])
+
+        draft = generate_static_policy_draft("AAR Health Clinic Nairobi", "aarhealthcare.com", "privacy@aarhealthcare.com", sector_info)
+        self.assertIn("HEALTHCARE SECTOR", draft)
+        self.assertIn("Sensitive Health Data", draft)
+        self.assertIn("Section 44(1)(f)", draft)
+        self.assertNotIn("shopping cart", draft.lower())
+        self.assertNotIn("courier", draft.lower())
+        self.assertNotIn("credit appraisal", draft.lower())
+
+    def test_retail_sector_profiling_and_redraft(self):
+        """Verifies retail/e-commerce detection and order/courier focus in redraft."""
+        from services.rag_auditor import detect_operational_sector, generate_static_policy_draft
+
+        text = (
+            "PrimeTech Kenya Online Electronics Store. We collect customer names, delivery addresses, "
+            "dispatch rider tracking, customer orders, M-Pesa payment confirmation codes, and shopping cart cookies. "
+            "We seek prior consent for promotional newsletters with an unburdened 48-hour opt-out mechanism. "
+            "Financial sales records are kept for 7 years for KRA tax purposes. We notify ODPC within 72 hours of security breaches. "
+            "ODPC recourse at Britam Tower."
+        )
+        sector_info = detect_operational_sector("PrimeTech Kenya Online Store", "primetech.ke", text)
+        self.assertEqual(sector_info["sector"], "retail")
+        self.assertTrue(sector_info["has_ecommerce"])
+
+        draft = generate_static_policy_draft("PrimeTech Kenya Online Store", "primetech.ke", "privacy@primetech.ke", sector_info)
+        self.assertIn("RETAIL & E-COMMERCE", draft)
+        self.assertIn("Customer Account & Contact Details", draft)
+        self.assertNotIn("patient", draft.lower())
+        self.assertNotIn("learner", draft.lower())
+
+
 class TestFlaskRoutes(unittest.TestCase):
     """Test web application routes and endpoints."""
 
