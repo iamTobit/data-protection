@@ -219,7 +219,7 @@ SeraGuard evaluates policies against the 10 statutory pillars of Kenyan data pro
   * Mentions security safeguards without citing the 72-hour ODPC breach notification window.
   * Lists basic rights (access, correction) but omits data portability or automated decision objection.
   * Mentions marketing opt-out without specifying a cost-free 48-hour execution window.
-  * Mentions cloud hosting/servers without referencing Standard Contractual Clauses (SCCs).
+  * Mentions cloud hosting/servers without referencing Section 48 / Part VII contractual safeguards.
   * Provides a general contact email/phone without naming a designated DPO (where DPO is mandatory under Section 24).
 - **`FAIL` (0 points):** The topic is **100% absent** from the entire document.
 - **`N/A`:** Excluded from both numerator and denominator (e.g. cross-border transfers for purely local non-cloud operations).
@@ -234,7 +234,7 @@ SeraGuard evaluates policies against the 10 statutory pillars of Kenyan data pro
 | **4** | `statutory_data_subject_rights` | **Sections 26, 38 & 40** | All 6 rights stated: Access, Rectification, Erasure, Portability, Objection, Automated Profiling. | Enumerates basic consumer rights (access/update) but misses 2+ statutory rights. | No data subject rights mentioned. |
 | **5** | `direct_marketing_opt_out` | **Section 37, Regs 13–14** | Prior opt-in consent requirement and unconditional, cost-free opt-out mechanism. | Marketing mentioned with general "unsubscribe", but missing zero-cost guarantee. | Promotional messages sent without opt-out rights. |
 | **6** | `retention_schedule` | **Section 39, Reg 19** | Concrete numeric retention schedule (e.g. 7 years for KRA tax records, 30 days for profiles). | Vague retention language (*"kept as long as necessary"*) without numeric years. | Indefinite retention or topic completely absent. |
-| **7** | `cross_border_transfers` | **Sections 48 & 49** | Binding Standard Contractual Clauses (SCCs) or ODPC adequacy safeguards for offshore cloud servers. | Foreign cloud providers (AWS, Google) mentioned without SCC safeguards. | Offshore transfers with zero legal safeguards. |
+| **7** | `cross_border_transfers` | **Sections 48 & 49** | Binding contractual agreements compliant with Section 48 & Part VII or ODPC adequacy safeguards for offshore cloud servers. | Foreign cloud providers (AWS, Google) mentioned without Section 48 safeguards. | Offshore transfers with zero legal safeguards. |
 | **8** | `security_breach_notification` | **Section 43** | Technical safeguards (TLS/AES) plus mandatory **72-hour ODPC breach notification** protocol. | Technical security (encryption, passwords) mentioned without the 72-hour notice window. | Zero security or breach safeguards disclosed. |
 | **9** | `children_data_protection` | **Section 33** | Minimum age restriction (18 years in Kenya) and verified parental/guardian consent safeguards. | Mentions minors generally without age verification protocols. | Completely silent on children's personal data. |
 | **10** | `odpc_regulatory_recourse` | **Section 56** | Explicit recourse to the **Office of the Data Protection Commissioner (ODPC)** at Britam Tower, Nairobi. | N/A | No mention of the ODPC or complaints channel. |
@@ -337,13 +337,13 @@ When redrafting, the LLM produces a production-ready document structured into 11
 1. Controller Identity, Scope & Nairobi Physical Address (Sec 24, 29)
 2. The 8 Principles of Data Protection (Sec 25)
 3. Specific Categories of Personal Data Collected
-4. Purposes & Statutory Lawful Bases Table (Sec 30, 32)
+4. Purposes & Statutory Lawful Bases Bullet List (Sec 30, 32)
 5. Direct Marketing & Cost-Free 48-Hour Opt-Out (Sec 37)
 6. Cookies & Analytics Controls
-7. Finite Retention Schedule Table (e.g. 7 Years for KRA Tax records) (Sec 39, Reg 19)
-8. Third-Party Processors & Cross-Border Standard Contractual Clauses (Sec 48, 49)
+7. Finite Retention Schedule Bullet List (e.g. 7 Years for KRA Tax records) (Sec 39, Reg 19)
+8. Third-Party Processors & Cross-Border Safeguards (Sec 48, 49 & Part VII Regs 40–48)
 9. Technical Safeguards & Mandatory 72-Hour ODPC Breach Notice (Sec 43)
-10. All 6 Statutory Data Subject Rights (Sec 26, 38, 40) & Child Verification (Sec 33)
+10. Statutory Data Subject Rights (Sec 26, 35, 36, 38, 40) & Child Verification (Sec 33)
 11. Regulatory Recourse & Complaints to the ODPC (Britam Tower, Upper Hill, Nairobi) (Sec 56)
 
 ---

@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 
-{% block title %}ODPC Compliance Assessment: {{ target_display_name or (full_report.entity_name if full_report is defined and full_report else report.target_url_or_name) }} ({{ risk_level }} Risk) | SeraGuard{% endblock %}
+{% block title %}ODPC Compliance Assessment: {{ target_display_name or (full_report.entity_name if full_report is
+defined and full_report else report.target_url_or_name) }} ({{ risk_level }} Risk) | SeraGuard{% endblock %}
 
 {% block extra_head %}
 <!-- Prevent public search engine indexing of private organization compliance findings -->
@@ -224,7 +225,8 @@
                     <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Target Entity /
                         Source</span>
                     <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 break-all">{{
-                        target_display_name or (full_report.entity_name if full_report is defined and full_report else report.target_url_or_name) }}</h1>
+                        target_display_name or (full_report.entity_name if full_report is defined and full_report else
+                        report.target_url_or_name) }}</h1>
                     <p class="text-xs text-slate-500 mt-1 flex items-center gap-2">
                         <span>Evaluated against: <strong>Kenya Data Protection Act, 2019</strong> & <strong>ODPC General
                                 Regulations 2021</strong></span>
@@ -580,8 +582,8 @@
                     marketing without explicit affirmative opt-in consent...</p>
                 <p>4. Retention Schedules (Section 39): Financial records retained for 7 years pursuant to tax
                     legislation; customer cookies purged after 90 days...</p>
-                <p>5. Cross-Border Transfers (Section 48): Transfers outside Kenya are secured by Standard Contractual
-                    Clauses...</p>
+                <p>5. Cross-Border Transfers (Section 48): Transfers outside Kenya are secured by appropriate safeguards
+                    and binding contractual agreements compliant with Section 48 and Part VII (Regulations 40–48)...</p>
                 <p>6. 72-Hour Breach Notification (Section 43): Notification to ODPC within seventy-two hours in the
                     event of high-risk security compromises...</p>
                 <p>7. Protection of Children's Data (Section 33): Verified parental consent required for minors under 18

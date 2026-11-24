@@ -342,10 +342,123 @@ class TestRAGAuditor(unittest.TestCase):
             for g in gaps:
                 self.assertEqual(g["severity"], "Medium")
 
-    def test_audit_cache_version_is_v12(self):
-        """Verifies AUDIT_CACHE_VERSION is bumped to v12 in app.py."""
+    def test_audit_cache_version_is_v15(self):
+        """Verifies AUDIT_CACHE_VERSION is bumped to v15 in app.py."""
         import app as flask_app
-        self.assertEqual(flask_app.AUDIT_CACHE_VERSION, "v12")
+        self.assertEqual(flask_app.AUDIT_CACHE_VERSION, "v15")
+
+    def test_kenyan_accuracy_rules_sha_and_section_34(self):
+        """Verifies SHA (never NHIF), Section 34 & Reg 11 restriction citation, and zero contact hallucination."""
+        from services.rag_auditor import generate_static_policy_draft, extract_primary_contact_email
+
+        # 1. Verify extract_primary_contact_email returns placeholder if no email present in source
+        no_email_text = "This policy text contains no contact email address at all."
+        self.assertEqual(extract_primary_contact_email(no_email_text, "example.co.ke"), "[Insert Official Contact Email]")
+        with_email_text = "Contact us at privacy@kenyaorg.co.ke for assistance."
+        self.assertEqual(extract_primary_contact_email(with_email_text, "kenyaorg.co.ke"), "privacy@kenyaorg.co.ke")
+
+        # 2. Verify all static templates contain Section 34 & Reg 11 for Restriction of Processing
+        sectors = [
+            ("Kabarak University", "kabarak.ac.ke"),
+            ("Avenue Hospital", "avenuehealthcare.com"),
+            ("Zenka Digital", "zenka.co.ke"),
+            ("Jumia Kenya", "jumia.co.ke"),
+            ("Corporate Consulting", "corpconsult.co.ke")
+        ]
+        for name, domain in sectors:
+            draft = generate_static_policy_draft(name, domain)
+            self.assertIn("Section 34 & Regulation 11", draft, f"Missing Section 34 & Reg 11 in {name}")
+            self.assertNotIn("NHIF", draft, f"Found defunct NHIF in {name}")
+            self.assertTrue(
+                any(marker in draft for marker in (
+                    "[Insert Registered Physical Address]",
+                    "[Insert Registered Campus Physical Address]",
+                    "[Insert Healthcare Facility Physical Address]",
+                    "[Insert Physical Store / Office Address]"
+                )),
+                f"Missing physical address placeholder in {name}"
+            )
+            self.assertIn("[Insert Official Contact Email]", draft, f"Missing placeholder email in {name}")
+
+        # 3. Verify Healthcare references SHA
+        hc_draft = generate_static_policy_draft("Avenue Hospital", "avenuehealthcare.com")
+        self.assertIn("SHA (Social Health Authority)", hc_draft)
+        self.assertNotIn("NHIF", hc_draft)
+
+    def test_six_statutory_and_formatting_refinements(self):
+        """Verifies Sec 25 formatting, conditional DPO phrasing, law firm retention, and M-Pesa spelling."""
+        from services.rag_auditor import generate_static_policy_draft, detect_operational_sector
+        from services.llm_gateway import condense_head_tail
+
+        # 1. Test Section 2 (Sec 25(a)) - (Sec 25(h)) formatting & conditional DPO in all static templates
+        sectors = [
+            ("Kabarak University", "kabarak.ac.ke"),
+            ("Avenue Hospital", "avenuehealthcare.com"),
+            ("Zenka Digital", "zenka.co.ke"),
+            ("Jumia Kenya", "jumia.co.ke"),
+            ("Corporate Consulting", "corpconsult.co.ke")
+        ]
+        for name, domain in sectors:
+            draft = generate_static_policy_draft(name, domain)
+            for char in "abcdefgh":
+                self.assertIn(f"(Sec 25({char}))", draft, f"Missing (Sec 25({char})) in {name}")
+                self.assertNotIn(f"(25 {char})", draft, f"Found loose (25 {char}) in {name}")
+            self.assertIn("designated Data Protection Officer where applicable under Section 24", draft)
+            self.assertNotIn("A Data Protection Officer is not mandatory", draft)
+            self.assertIn("M-Pesa", draft)
+            self.assertNotIn("M-Pay", draft)
+            self.assertNotIn("mpay", draft)
+
+        # 2. Test Law Firm / Advocates detection and retention nuance
+        law_sec = detect_operational_sector(
+            "Bowmans Coulson Harney LLP Advocates",
+            "bowmanslaw.com",
+            "Legal practice, litigation, conveyancing property records, advocates act."
+        )
+        self.assertTrue(law_sec.get("is_law_firm"))
+        self.assertIn("Legal Practice", law_sec.get("sector_label", ""))
+
+        law_draft = generate_static_policy_draft("Bowmans Advocates LLP", "bowmanslaw.com", sector_info=law_sec)
+        self.assertIn("Advocates Act (Cap 16)", law_draft)
+        self.assertIn("Limitation of Actions Act (Cap 22)", law_draft)
+        self.assertIn("7 to 12 years", law_draft.lower())
+
+        # 3. Test Head+Tail condensation preserving 3500 head and 1500 tail
+        long_text = "HEAD_" + ("A" * 4000) + "_MIDDLE_" + ("B" * 4000) + "_TAIL_FREEDOM_HEIGHTS_MALL"
+        condensed = condense_head_tail(long_text, head_chars=3500, tail_chars=1500)
+        self.assertTrue(condensed.startswith("HEAD_"))
+        self.assertTrue(condensed.endswith("_TAIL_FREEDOM_HEIGHTS_MALL"))
+        self.assertIn("CONDENSED FOR TOKEN WINDOW", condensed)
+
+    def test_no_gdpr_hallucinations_in_static_drafts_and_templates(self):
+        """Verifies zero occurrences of SCCs, 30(1)(c) or EU terms in static drafts and privacy policy template."""
+        from services.rag_auditor import generate_static_policy_draft
+        sectors = [
+            ("Kabarak University", "kabarak.ac.ke"),
+            ("Avenue Hospital", "avenuehealthcare.com"),
+            ("Zenka Digital", "zenka.co.ke"),
+            ("Jumia Kenya", "jumia.co.ke"),
+            ("Corporate Consulting", "corpconsult.co.ke")
+        ]
+        for name, domain in sectors:
+            draft = generate_static_policy_draft(name, domain)
+            self.assertNotIn("Standard Contractual Clauses", draft, f"Found SCCs in {name} draft")
+            self.assertNotIn("SCCs", draft, f"Found SCCs in {name} draft")
+            self.assertNotIn("30(1)(c)", draft, f"Found 30(1)(c) in {name} draft")
+            self.assertNotIn("30(1)(d)", draft, f"Found 30(1)(d) in {name} draft")
+            self.assertNotIn("30(1)(f)", draft, f"Found 30(1)(f) in {name} draft")
+            self.assertNotIn("whichever is higher", draft, f"Found 'whichever is higher' in {name} draft")
+            self.assertIn("Section 30(1)(b)(i)", draft, f"Expected Section 30(1)(b)(i) in {name} draft")
+
+        # Check templates/privacy_policy.html
+        with open("templates/privacy_policy.html", "r", encoding="utf-8") as f:
+            pp_html = f.read()
+            self.assertNotIn("Standard Contractual Clauses", pp_html)
+            self.assertNotIn("SCCs", pp_html)
+            self.assertNotIn("30(1)(c)", pp_html)
+            self.assertIn("Section 30(1)(b)(i)", pp_html)
+            self.assertIn("Section 30(1)(b)(ii)", pp_html)
+            self.assertIn("Section 30(1)(b)(vii)", pp_html)
 
     def test_static_policy_drafts_contain_no_pipe_tables(self):
         """Verifies that static fallback redrafts across all sectors use bolded bullet lists instead of pipe tables."""

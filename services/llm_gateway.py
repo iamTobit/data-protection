@@ -382,7 +382,7 @@ class LLMGateway:
                 if is_gemini:
                     doc_slice = document_text[:45000]
                 else:
-                    doc_slice = condense_head_tail(document_text, 3000, 2000)
+                    doc_slice = condense_head_tail(document_text, 3500, 1500)
 
                 if "{document_text}" in user_content:
                     prompt_text = user_content.replace("{document_text}", doc_slice)

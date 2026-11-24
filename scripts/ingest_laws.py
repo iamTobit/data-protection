@@ -49,11 +49,13 @@ FOUNDATIONAL_KENYAN_LAWS = [
         "content": (
             "Section 25: Principles of data protection. Every data controller or data processor shall ensure "
             "that personal data is: (a) processed in accordance with the right to privacy of the data subject; "
-            "(b) processed lawfully, fairly and in a transparent manner; (c) collected for explicit, specified "
-            "and legitimate purposes and not further processed in a manner incompatible with those purposes; "
-            "(d) adequate, relevant and limited to what is necessary (data minimisation); (e) accurate and kept up to date; "
-            "(f) kept in a form which permits identification of data subjects for no longer than is necessary (storage limitation); "
-            "and (g) not transferred outside Kenya unless there is proof of adequate safeguards or consent."
+            "(b) processed lawfully, fairly and in a transparent manner in relation to any data subject; "
+            "(c) collected for explicit, specified and legitimate purposes and not further processed in a manner incompatible with those purposes; "
+            "(d) adequate, relevant and limited to what is necessary in relation to the purposes for which it is processed (data minimisation); "
+            "(e) collected only where a valid explanation is provided whenever information relating to family or private affairs is required; "
+            "(f) accurate and, where necessary, kept up to date, with every reasonable step being taken to ensure that inaccurate personal data is erased or rectified without delay; "
+            "(g) kept in a form which identifies the data subjects for no longer than is necessary for the purposes for which it was collected (storage limitation); "
+            "and (h) not transferred outside Kenya, unless there is proof of adequate data protection safeguards or consent from the data subject."
         ),
         "metadata": {"topic": "principles", "source": "Kenya Gazette Supplement No. 181 (Acts No. 24)"}
     },
@@ -63,9 +65,9 @@ FOUNDATIONAL_KENYAN_LAWS = [
         "citation": "Kenya Data Protection Act, 2019, Section 26",
         "content": (
             "Section 26: Rights of a data subject. A data subject has a right to: (a) be informed of the use to which "
-            "their personal data is to be put; (b) access their personal data in custody of data controller or processor; "
-            "(c) object to the processing of all or part of their personal data; (d) correction of false or misleading data; "
-            "and (e) deletion of false or misleading data about them. Data controllers must provide accessible procedures "
+            "their personal data is to be put; (b) access their personal data in custody of data controller or processor (Reg 9, free of charge within 7 days); "
+            "(c) object to the processing of all or part of their personal data (Section 36); (d) correction of false or misleading data (Section 40 & Reg 10, 14 days); "
+            "and (e) deletion of false or misleading data about them (Section 40 & Reg 12, 14 days). Data controllers must provide accessible procedures "
             "for individuals to exercise these statutory rights without undue delay."
         ),
         "metadata": {"topic": "data_subject_rights", "source": "DPA 2019"}
@@ -75,12 +77,16 @@ FOUNDATIONAL_KENYAN_LAWS = [
         "section_ref": "Section 30",
         "citation": "Kenya Data Protection Act, 2019, Section 30",
         "content": (
-            "Section 30: Lawful processing of personal data. A data controller or data processor shall not process "
-            "personal data unless: (a) the data subject consents to the processing; (b) processing is necessary for the "
-            "performance of a contract to which the data subject is a party; (c) compliance with any legal obligation; "
-            "(d) to protect the vital interests of the data subject; (e) performance of a public task; or (f) for the "
-            "exercise of legitimate interests pursued by the data controller or third party, except where overridden by "
-            "the fundamental rights of the data subject."
+            "Section 30: Lawful processing of personal data. (1) A data controller or data processor shall not process personal data, unless: "
+            "(a) the data subject consents to the processing for one or more specified purposes (Section 30(1)(a) & Section 32); or "
+            "(b) the processing is necessary: (i) for the performance of a contract to which the data subject is a party or in order to take steps before entering into a contract (Section 30(1)(b)(i)); "
+            "(ii) for compliance with any legal obligation to which the controller is subject, e.g. statutory tax or regulatory duties (Section 30(1)(b)(ii)); "
+            "(iii) in order to protect the vital interests of the data subject or another natural person (Section 30(1)(b)(iii)); "
+            "(iv) for the performance of a task carried out in the public interest or in the exercise of official authority (Section 30(1)(b)(iv)); "
+            "(v) for the performance of any task carried out by a public authority (Section 30(1)(b)(v)); "
+            "(vi) for the exercise of the appropriate functions of a public body (Section 30(1)(b)(vi)); "
+            "(vii) for the purposes of the legitimate interests pursued by the data controller or processor or by a third party to whom the data is disclosed, except if unwarranted having regard to harm to the data subject (Section 30(1)(b)(vii)); or "
+            "(viii) for the purpose of historical, statistical, or scientific research (Section 30(1)(b)(viii))."
         ),
         "metadata": {"topic": "lawful_basis", "source": "DPA 2019"}
     },
@@ -137,15 +143,38 @@ FOUNDATIONAL_KENYAN_LAWS = [
     },
     {
         "act_title": "Data Protection Act, 2019",
-        "section_ref": "Section 40",
-        "citation": "Kenya Data Protection Act, 2019, Section 40",
+        "section_ref": "Section 35",
+        "citation": "Kenya Data Protection Act, 2019, Section 35",
         "content": (
-            "Section 40: Automated individual decision making. (1) A data subject has the right not to be subjected to a decision "
+            "Section 35: Automated individual decision making and profiling. (1) A data subject has the right not to be subjected to a decision "
             "based solely on automated processing, including profiling, which produces legal effects concerning or significantly "
             "affects the data subject. (2) Where a decision is made solely on automated processing, the data controller shall "
             "inform the data subject and guarantee the right to obtain human intervention and contest the decision."
         ),
         "metadata": {"topic": "automated_decision_making", "source": "DPA 2019"}
+    },
+    {
+        "act_title": "Data Protection Act, 2019",
+        "section_ref": "Section 36",
+        "citation": "Kenya Data Protection Act, 2019, Section 36",
+        "content": (
+            "Section 36: Right to object. A data subject has the right to object to the processing of all or part of their personal data, "
+            "including for direct marketing purposes, unless the data controller demonstrates compelling legitimate grounds for processing "
+            "which override the data subject's interests, rights and freedoms."
+        ),
+        "metadata": {"topic": "right_to_object", "source": "DPA 2019"}
+    },
+    {
+        "act_title": "Data Protection Act, 2019",
+        "section_ref": "Section 40",
+        "citation": "Kenya Data Protection Act, 2019, Section 40",
+        "content": (
+            "Section 40: Rectification and erasure of personal data. (1) A data subject may request a data controller or data processor: "
+            "(a) to rectify personal data about the data subject that is inaccurate, out of date, incomplete or misleading; or "
+            "(b) to erase or destroy personal data that the data controller or processor is no longer authorized to retain, irrelevant, "
+            "excessive, or obtained unlawfully. Under Regulations 10 & 12 of the General Regulations 2021, requests must be fulfilled within 14 days without charge."
+        ),
+        "metadata": {"topic": "rectification_erasure", "source": "DPA 2019"}
     },
     {
         "act_title": "Data Protection Act, 2019",
@@ -172,13 +201,13 @@ FOUNDATIONAL_KENYAN_LAWS = [
     },
     {
         "act_title": "Data Protection Act, 2019",
-        "section_ref": "Section 48",
-        "citation": "Kenya Data Protection Act, 2019, Section 48",
+        "section_ref": "Section 48 & Part VII",
+        "citation": "Kenya Data Protection Act, 2019, Section 48 & General Regulations Part VII",
         "content": (
-            "Section 48: Transfer of personal data outside Kenya. A data controller or data processor may transfer personal data "
-            "outside Kenya only where: (a) the data controller has given proof to the Data Commissioner of the appropriate safeguards "
-            "existing in the recipient country; (b) the transfer is necessary for performance of a contract between the data subject "
-            "and controller; or (c) the data subject has consented after being informed of the possible risks."
+            "Section 48 and Part VII (Regulations 40–48): Transfer of personal data outside Kenya. A data controller or data processor "
+            "may transfer personal data outside Kenya only where: (a) the data controller has given proof to the Data Commissioner of the "
+            "appropriate safeguards existing in the recipient country through binding contractual agreements or adequacy decisions; "
+            "(b) the transfer is necessary for performance of a contract; or (c) explicit consent is obtained from the data subject."
         ),
         "metadata": {"topic": "cross_border_transfer", "source": "DPA 2019"}
     },
@@ -187,9 +216,9 @@ FOUNDATIONAL_KENYAN_LAWS = [
         "section_ref": "Section 49",
         "citation": "Kenya Data Protection Act, 2019, Section 49",
         "content": (
-            "Section 49: Safeguards prior to transfer of sensitive personal data outside Kenya. The Data Commissioner may prohibit, "
-            "suspend or subject the transfer to conditions where the processing involves sensitive personal data or transfer is to a "
-            "country that does not have adequate data protection laws or reciprocal arrangements."
+            "Section 49: Safeguards prior to transfer of sensitive personal data outside Kenya. (1) The transfer of sensitive personal "
+            "data outside Kenya requires the explicit consent of the data subject AND confirmation of appropriate safeguards or authorization "
+            "by the Data Commissioner. The Data Commissioner may prohibit, suspend or subject the transfer to conditions."
         ),
         "metadata": {"topic": "sensitive_data_transfer", "source": "DPA 2019"}
     },
