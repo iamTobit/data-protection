@@ -551,6 +551,15 @@ defined and full_report else report.target_url_or_name) }} ({{ risk_level }} Ris
         </div>
 
         {% if is_paid %}
+        <!-- Customization Guide Tip Banner -->
+        <div
+            class="mb-4 p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-center gap-2.5 shadow-sm">
+            <i data-lucide="info" class="w-4 h-4 text-amber-600 flex-shrink-0"></i>
+            <span><strong>Tip:</strong> Review this tailored compliance draft against your internal operations and fill
+                in any bracketed <code>[Insert ...]</code> fields (such as your ODPC Certificate Number) before
+                publishing live.</span>
+        </div>
+
         <!-- UNLOCKED FULL POLICY DRAFT (Clean Rendered HTML) -->
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-10 mb-6">
             <div class="policy-document" id="policy-content-rendered">

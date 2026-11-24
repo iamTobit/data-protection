@@ -45,7 +45,7 @@ logging.basicConfig(
 logger = logging.getLogger("odpc_auditor_app")
 
 # Audit Cache Version: bump to automatically invalidate stale cached scores across deployments
-AUDIT_CACHE_VERSION = os.getenv("AUDIT_CACHE_VERSION", "v15").strip()
+AUDIT_CACHE_VERSION = os.getenv("AUDIT_CACHE_VERSION", "v16").strip()
 
 app = Flask(__name__)
 # Secret key for session signing: prefer FLASK_SECRET_KEY, fallback to SECRET_KEY

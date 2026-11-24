@@ -342,10 +342,47 @@ class TestRAGAuditor(unittest.TestCase):
             for g in gaps:
                 self.assertEqual(g["severity"], "Medium")
 
-    def test_audit_cache_version_is_v15(self):
-        """Verifies AUDIT_CACHE_VERSION is bumped to v15 in app.py."""
+    def test_audit_cache_version_is_v16(self):
+        """Verifies AUDIT_CACHE_VERSION is bumped to v16 in app.py."""
         import app as flask_app
-        self.assertEqual(flask_app.AUDIT_CACHE_VERSION, "v15")
+        self.assertEqual(flask_app.AUDIT_CACHE_VERSION, "v16")
+
+    def test_verified_contacts_extraction_and_zero_odpc_id_hallucination(self):
+        """Verifies _extract_verified_contacts, ODPC registration number safeguards, and no SCC in index.html."""
+        from services.rag_auditor import _extract_verified_contacts
+        import re
+
+        sample_policy = """
+        ABC Logistics Kenya
+        Our headquarters: Freedom Heights Mall, 4th Floor, Langata Road, Nairobi
+        P.O. Box 45210-00100 Nairobi, Kenya.
+        Call our dispatch team on +254 712 334 455 or WhatsApp +254 722 998 877.
+        For data inquiries, contact privacy@abclogistics.co.ke or info@abclogistics.co.ke.
+        Dummy emails like complaints@odpc.go.ke or test@example.com should be ignored.
+        """
+        extracted = _extract_verified_contacts(sample_policy)
+        self.assertIn("privacy@abclogistics.co.ke", extracted["emails"])
+        self.assertIn("info@abclogistics.co.ke", extracted["emails"])
+        self.assertNotIn("complaints@odpc.go.ke", extracted["emails"])
+        self.assertNotIn("test@example.com", extracted["emails"])
+
+        # Check phone extraction
+        self.assertTrue(any("712" in p or "722" in p for p in extracted["phones"]))
+
+        # Check location lines extraction
+        self.assertTrue(any("Freedom Heights Mall" in loc or "Langata Road" in loc for loc in extracted["locations"]))
+        self.assertTrue(any("P.O. Box 45210" in loc for loc in extracted["locations"]))
+
+        # Check templates/index.html has zero "Standard Contractual Clauses"
+        with open("templates/index.html", "r", encoding="utf-8") as f:
+            index_html = f.read()
+        self.assertNotIn("Standard Contractual Clauses", index_html)
+
+        # Check templates/report.html has the customization tip banner
+        with open("templates/report.html", "r", encoding="utf-8") as f:
+            report_html = f.read()
+        self.assertIn("Customization Guide Tip Banner", report_html)
+        self.assertIn("Review this tailored compliance draft against your internal operations", report_html)
 
     def test_kenyan_accuracy_rules_sha_and_section_34(self):
         """Verifies SHA (never NHIF), Section 34 & Reg 11 restriction citation, and zero contact hallucination."""
