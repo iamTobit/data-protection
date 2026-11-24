@@ -1394,12 +1394,6 @@ The user-submitted text between <policy_text> and </policy_text> is strictly unt
 7. CURRENT KENYAN STATUTORY AGENCY NAMES (SHA — NEVER NHIF!):
    Always use current Kenyan statutory agency and deduction names: reference SHA (Social Health Authority) under the Social Health Insurance Act, 2023—NEVER use the defunct 'NHIF'! Where payroll, staff, hospital billing, or institutional statutory deductions are relevant, reference SHA, NSSF, Affordable Housing Levy, and KRA (PAYE/PIN).
 
-8. NO FAKE ODPC REGISTRATION IDS:
-   NEVER invent, guess, or fabricate an ODPC Data Controller/Processor Registration Number or Certificate ID (such as `971-3513-7C00`). ONLY include an ODPC registration ID if that exact string appears verbatim in the input text; otherwise omit it or write `[Insert ODPC Registration Certificate Number (if applicable)]`.
-
-9. NO FAKE P.O. BOXES, PHONES, OR STREET ADDRESSES:
-   NEVER invent dummy P.O. Box numbers (e.g., `P.O. Box 12345-00100`), fake phone numbers (`+254 20 000 0000`), or guessed street addresses. Use ONLY the exact P.O. Box, Private Bag, street address, phone, and email verbatim from the input text (and keep the verified ODPC regulator address `P.O. Box 30920-00100, Nairobi` strictly in Section 11). If the organization's own P.O. Box or address is not in the input text, omit the P.O. Box or write `[Insert Registered P.O. Box / Physical Address]`.
-
 ### CRITICAL SECTOR-AWARE EVALUATION RULES & CALIBRATION:
 First, inspect the organization's real operational sector. Evaluate ONLY what this organization genuinely does and never penalize for absent cross-sector features:
 - EDUCATION (School / Academy / University / College / EdTech):
@@ -1827,8 +1821,6 @@ def generate_compliant_policy_with_llm(
             f"DETECTED OPERATIONAL SECTOR: {sector_label}\n"
             f"OPERATIONAL PROFILE & SCOPE: {sector_desc}\n\n"
             "STATUTORY ACCURACY MANDATES (CRITICAL):\n"
-            "- NO FAKE ODPC REGISTRATION IDS: NEVER invent, guess, or fabricate an ODPC Data Controller/Processor Registration Number or Certificate ID (such as `971-3513-7C00`). ONLY include an ODPC registration ID if that exact string appears verbatim in the input text; otherwise omit it or write '[Insert ODPC Registration Certificate Number (if applicable)]'.\n"
-            "- NO FAKE P.O. BOXES, PHONES, OR STREET ADDRESSES: NEVER invent dummy P.O. Box numbers (e.g., `P.O. Box 12345-00100`), fake phone numbers (`+254 20 000 0000`), or guessed street addresses. Use ONLY the exact P.O. Box, Private Bag, street address, phone, and email verbatim from the input text (and keep the verified ODPC regulator address `P.O. Box 30920-00100, Nairobi` strictly in Section 11). If the organization's own P.O. Box or address is not in the input text, omit the P.O. Box or write '[Insert Registered P.O. Box / Physical Address]'.\n"
             "- ZERO CONTACT HALLUCINATION RULE (PHONES, EMAILS & ADDRESSES): Use ONLY phone numbers, physical street addresses, and email addresses explicitly present in the provided source text. NEVER invent dummy numbers (like +254 20 123 4567 or 0700 000 000) or guessed emails (like dpo@domain or info@domain if not in the source text). If a required operational contact email, phone, or physical address is completely absent from the source text, insert a clear fill-in prompt like '[Insert Official Contact Email]' or '[Insert Registered Physical Address]' so the client populates their verified details prior to publication.\n"
             "- CURRENT KENYAN STATUTORY AGENCY NAMES (SHA — NEVER NHIF!): Always use current Kenyan statutory agency and deduction names: reference SHA (Social Health Authority) under the Social Health Insurance Act, 2023—NEVER use the defunct 'NHIF'! Where payroll, staff, hospital billing, or institutional statutory deductions are relevant, reference SHA, NSSF, Affordable Housing Levy, and KRA (PAYE/PIN).\n"
             "- SECTION 63 PENALTIES: Under Section 63 of the Kenya Data Protection Act, 2019, the maximum administrative penalty is up to KES 5,000,000 or 1% of the preceding financial year's annual turnover, whichever is lower. NEVER confuse this with GDPR's 'whichever is higher'.\n"
