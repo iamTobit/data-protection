@@ -1806,17 +1806,23 @@ def generate_compliant_policy_with_llm(
             "3. HANDLE [email protected] SMARTLY: If scraped text contains Cloudflare '[email protected]', do NOT invent fake bouncing emails. "
             "Use their verified telephone/WhatsApp number and physical address as primary contact, noting 'Official contact email listed on our Contact page' (or use {contact_email} if valid).\n"
             "4. NO IRRELEVANT LAWS: Do NOT mention Central Bank of Kenya (CBK) AML banking regulations unless the entity is explicitly a licensed bank/SACCO/fintech. Stick strictly to KRA tax rules and the Kenya Data Protection Act 2019.\n"
-            "5. STRICT LENGTH BUDGET (<1,100 WORDS): Keep each section concise, punchy, and scannable (compact tables and short bullet points). "
+            "5. STRICT LENGTH BUDGET (<1,100 WORDS): Keep each section concise, punchy, and scannable (clean bolded bullet lists). "
             "Never write multi-paragraph essays so the entire policy comfortably completes all 11 sections through the final disclaimer without truncating. "
             "NEVER output bracketed placeholders like '[Insert Name]' or '[Insert Email]'.\n\n"
+            "6. STRICT BAN ON MARKDOWN TABLES (CRITICAL):\n"
+            "   - NEVER output Markdown pipe tables (`| Column | Column |` or `|---|---|`) anywhere in the privacy policy!\n"
+            "   - All structured sections (Controller Details, Categories of Data, Lawful Bases, Retention Schedules, Third-Party Transfers, Data Subject Rights Timelines, and ODPC Contacts) MUST be formatted as clean, scannable bolded bullet lists, for example:\n"
+            "     * **Right of Access (Reg 9):** Fulfilled free of charge within 7 days via written request.\n"
+            "     * **M-Pesa & Tax Records:** Retained for 7 years to satisfy statutory KRA audit obligations, then securely deleted.\n"
+            "   - This guarantees 100% clean copy-pasting into WordPress, Wix, Shopify, HTML, and Word documents with zero broken columns.\n\n"
             "MANDATORY 11-SECTION STRUCTURE IN CLEAN MARKDOWN (ADAPTED TO THIS SECTOR):\n"
             "1. Controller Identity & Scope (Sec 24 & 29): Real entity name, physical street address, phone/WhatsApp, official website, operational channels, and contact details of a designated Data Protection Officer (where mandatory under Section 24) or a dedicated privacy compliance contact channel.\n"
             "2. Data Protection Principles (Sec 25): Concise 1-sentence commitment to the 8 statutory principles.\n"
             "3. Categories of Personal Data Collected (Sec 29): Tailored strictly to this organization's sector.\n"
-            "4. Purposes & Lawful Bases (Sec 30 & 32): Compact table mapping activities to Lawful Bases (Contractual Necessity, Legal Obligation, Legitimate Interests, Consent, or Section 44 for Health Data).\n"
+            "4. Purposes & Lawful Bases (Sec 30 & 32): Compact bolded bullet list mapping activities to Lawful Bases (Contractual Necessity, Legal Obligation, Legitimate Interests, Consent, or Section 44 for Health Data). NEVER use Markdown tables or pipe characters.\n"
             "5. Direct Marketing & Communications (Sec 37): Sector-appropriate terms (for schools/hospitals: state non-commercial policy; for retail: prior affirmative opt-in with cost-free 48-hour opt-out).\n"
             "6. Digital Portals, Cookies & Analytics: Session authentication and analytics controls.\n"
-            "7. Finite Retention Schedule (Sec 39 & Reg 19): Compact table with sector-appropriate numeric timeframes (e.g. 7 years KRA for retail/fintech/corporate, 7–10 years MOH for healthcare clinical records, permanent for academic transcripts).\n"
+            "7. Finite Retention Schedule (Sec 39 & Reg 19): Compact bolded bullet list with sector-appropriate numeric timeframes (e.g. 7 years KRA for retail/fintech/corporate, 7–10 years MOH for healthcare clinical records, permanent for academic transcripts). NEVER use Markdown tables or pipe characters.\n"
             "8. Third Parties & Cross-Border Transfers (Sec 42, 48 & 49): Sector-relevant service providers and binding Standard Contractual Clauses (SCCs).\n"
             "9. Security Safeguards & 72-Hour Breach Notice (Sec 43): Safeguards, access controls, and mandatory 72-hour ODPC notification.\n"
             "10. Statutory Data Subject Rights (Sec 26, 38 & 40) & Child Protection (Sec 33): All 6 rights plus sector-appropriate child rules (Section 33 parental consent for schools/minors; 18+ for retail/fintech/corporate).\n"
@@ -1858,6 +1864,30 @@ Generate the complete, customized, sector-aligned replacement Privacy Policy in 
         redraft = re.sub(r'\[Insert\s+[^\]]+\]', contact_email, redraft, flags=re.IGNORECASE)
         redraft = re.sub(r'\[Your\s+[^\]]+\]', entity_name, redraft, flags=re.IGNORECASE)
 
+        # Convert any legacy markdown tables in LLM output into clean bolded bullet lists
+        if "|" in redraft and any(marker in redraft for marker in ("| :---", "|:---", "|---", "| -")):
+            table_converted_lines = []
+            for line in redraft.split("\n"):
+                s = line.strip()
+                if re.match(r'^\s*\|?\s*[-:]+[-| :]*\|?\s*$', s) and "-" in s:
+                    continue
+                if s.startswith("|") and s.endswith("|"):
+                    cells = [c.strip() for c in s.split("|") if c.strip()]
+                    if not cells or all(re.match(r'^[-:]+$', c) for c in cells):
+                        continue
+                    c1 = re.sub(r'^\*+|\*+$', '', cells[0]).strip()
+                    if len(cells) == 1:
+                        table_converted_lines.append(f"- **{c1}**")
+                    elif len(cells) == 2:
+                        c2 = cells[1].strip()
+                        table_converted_lines.append(f"- **{c1}:** {c2}")
+                    else:
+                        crest = " — ".join(cells[1:])
+                        table_converted_lines.append(f"- **{c1}:** {crest}")
+                    continue
+                table_converted_lines.append(line)
+            redraft = "\n".join(table_converted_lines)
+
         if redraft and len(redraft) > 500:
             logger.info("Successfully generated bespoke LLM replacement policy using model '%s' (%d chars).", model_used, len(redraft))
             return redraft
@@ -1873,14 +1903,17 @@ Generate the complete, customized, sector-aligned replacement Privacy Policy in 
 def generate_static_policy_draft(
     name: str,
     domain: str,
-    primary_email: str,
-    sector_info: Dict[str, Any]
+    primary_email: str = "privacy@example.com",
+    sector_info: Optional[Dict[str, Any]] = None
 ) -> str:
     """
     Generates a high-quality, sector-specific 11-section ODPC compliant replacement
     Privacy Policy template when LLM calls are unavailable or exhausted.
     Strictly tailors categories, purposes, retention, and legal bases to the organization's real sector.
     """
+    if sector_info is None:
+        sector_info = detect_operational_sector(name, domain, "")
+
     sec_type = sector_info.get("sector", "general")
 
     if sec_type == "education":
@@ -1926,13 +1959,11 @@ We collect and process the following categories of personal data directly from s
 
 ### 4. Purposes and Lawful Bases for Processing (Section 30 & 32)
 We process personal data strictly under valid Kenyan statutory grounds:
-| Educational Processing Activity | Statutory Lawful Basis (DPA 2019) |
-| :--- | :--- |
-| Student admission, academic instruction & progress reporting | **Contractual Performance / Educational Mandate** |
-| National examination registration (KNEC) & NEMIS reporting | **Legal Obligation (Basic Education Act / Universities Act)** |
-| School fee billing & accounting records | **Legal Obligation (Tax & Commercial Legislation)** |
-| Emergency medical first aid by school clinic / designated hospital | **Vital Interests (Section 30(1)(d))** |
-| Extracurricular publications, yearbooks & student awards | **Prior Affirmative Consent (Section 32)** |
+- **Student Admission, Academic Instruction & Progress Reporting:** Contractual Performance / Educational Mandate.
+- **National Examination Registration (KNEC) & NEMIS Reporting:** Legal Obligation (Basic Education Act / Universities Act).
+- **School Fee Billing & Accounting Records:** Legal Obligation (Tax & Commercial Legislation).
+- **Emergency Medical First Aid by School Clinic / Designated Hospital:** Vital Interests (Section 30(1)(d)).
+- **Extracurricular Publications, Yearbooks & Student Awards:** Prior Affirmative Consent (Section 32).
 
 ---
 
@@ -2041,13 +2072,11 @@ We collect the following personal and medical data directly from patients and au
 
 ### 4. Purposes and Lawful Bases for Processing (Section 30, 32 & 44)
 We process patient data strictly under explicit statutory grounds under Kenyan law:
-| Healthcare Processing Activity | Statutory Lawful Basis (DPA 2019) |
-| :--- | :--- |
-| Clinical diagnosis, medical treatment & nursing care | **Section 44(1)(f) - Health Care Services under professional secrecy** |
-| Emergency triage when patient is incapacitated | **Vital Interests (Section 30(1)(d))** |
-| Mandatory disease surveillance & Ministry of Health reporting | **Legal Obligation (Public Health Act / MOH Directives)** |
-| SHA & insurance pre-authorizations & claims billing | **Contractual Performance / Legitimate Processing** |
-| Specialist medical referrals | **Patient Explicit Consent (Section 32)** |
+- **Clinical Diagnosis, Medical Treatment & Nursing Care:** Section 44(1)(f) - Health Care Services under professional secrecy.
+- **Emergency Triage When Patient Is Incapacitated:** Vital Interests (Section 30(1)(d)).
+- **Mandatory Disease Surveillance & Ministry of Health Reporting:** Legal Obligation (Public Health Act / MOH Directives).
+- **SHA & Insurance Pre-Authorizations & Claims Billing:** Contractual Performance / Legitimate Processing.
+- **Specialist Medical Referrals:** Patient Explicit Consent (Section 32).
 
 ---
 
@@ -2154,13 +2183,11 @@ We collect and process the following categories of personal data pursuant to **S
 
 ### 4. Purposes and Lawful Bases for Processing (Section 30 & 32)
 We process customer financial data strictly under explicit statutory grounds:
-| Financial Processing Activity | Statutory Lawful Basis (DPA 2019) |
-| :--- | :--- |
-| Customer onboarding, loan underwriting & account management | **Contractual Performance (Section 30(1)(a))** |
-| Customer Due Diligence (CDD) & AML reporting | **Legal Obligation (POCAMLA & CBK/SASRA Regulations)** |
-| Credit score reporting to licensed CRBs | **Legal Obligation (Credit Reference Bureau Regulations)** |
-| Fraud detection, platform security & debt recovery | **Legitimate Interests (Section 30(1)(c))** |
-| Promotional financial product communications | **Prior Affirmative Consent (Section 32)** |
+- **Customer Onboarding, Loan Underwriting & Account Management:** Contractual Performance (Section 30(1)(a)).
+- **Customer Due Diligence (CDD) & AML Reporting:** Legal Obligation (POCAMLA & CBK/SASRA Regulations).
+- **Credit Score Reporting to Licensed CRBs:** Legal Obligation (Credit Reference Bureau Regulations).
+- **Fraud Detection, Platform Security & Debt Recovery:** Legitimate Interests (Section 30(1)(c)).
+- **Promotional Financial Product Communications:** Prior Affirmative Consent (Section 32).
 
 ---
 
@@ -2269,12 +2296,10 @@ We collect the following personal data directly from customers pursuant to **Sec
 
 ### 4. Purposes and Lawful Bases for Processing (Section 30 & 32)
 We process personal data strictly under valid Kenyan statutory grounds:
-| Retail Processing Activity | Statutory Lawful Basis (DPA 2019) |
-| :--- | :--- |
-| Order processing, dispatch coordination & delivery | **Contractual Performance (Section 30(1)(a))** |
-| Customer billing & KRA commercial invoice retention | **Legal Obligation (Tax & Commercial Legislation)** |
-| Promotional newsletters & discount SMS notifications | **Prior Affirmative Consent (Section 32)** |
-| Shopping cart security & fraud prevention | **Legitimate Interests (Section 30(1)(c))** |
+- **Order Processing, Dispatch Coordination & Delivery:** Contractual Performance (Section 30(1)(a)).
+- **Customer Billing & KRA Commercial Invoice Retention:** Legal Obligation (Tax & Commercial Legislation).
+- **Promotional Newsletters & Discount SMS Notifications:** Prior Affirmative Consent (Section 32).
+- **Shopping Cart Security & Fraud Prevention:** Legitimate Interests (Section 30(1)(c)).
 
 ---
 
@@ -2383,12 +2408,10 @@ We collect and process the following categories of personal data pursuant to **S
 
 ### 4. Purposes and Lawful Bases for Processing (Section 30 & 32)
 We process personal data strictly under valid Kenyan statutory grounds:
-| Organizational Processing Activity | Statutory Lawful Basis (DPA 2019) |
-| :--- | :--- |
-| Execution and fulfillment of client service contracts | **Contractual Performance (Section 30(1)(a))** |
-| Commercial accounting, invoice generation & tax reporting | **Legal Obligation (Tax & Commercial Statutes)** |
-| Service inquiries and corporate correspondence | **Legitimate Interests (Section 30(1)(c))** |
-| Client newsletters and regulatory event invitations | **Prior Affirmative Consent (Section 32)** |
+- **Execution and Fulfillment of Client Service Contracts:** Contractual Performance (Section 30(1)(a)).
+- **Commercial Accounting, Invoice Generation & Tax Reporting:** Legal Obligation (Tax & Commercial Statutes).
+- **Service Inquiries and Corporate Correspondence:** Legitimate Interests (Section 30(1)(c)).
+- **Client Newsletters and Regulatory Event Invitations:** Prior Affirmative Consent (Section 32).
 
 ---
 
@@ -2956,10 +2979,37 @@ def format_policy_html(markdown_text: str) -> str:
 def strip_markdown_for_text(markdown_text: str) -> str:
     """
     Strips raw markdown syntax (#, **, __, etc.) for clean, plain text downloads.
+    Also parses any legacy markdown pipe tables into scannable bullet points.
     """
     if not markdown_text:
         return ""
     text = markdown_text
+
+    # Parse and convert legacy markdown tables into clean bullet lines
+    if "|" in text:
+        lines = []
+        for line in text.split("\n"):
+            stripped = line.strip()
+            # Skip separator rows like |---|---| or |:---|:---|
+            if re.match(r'^\s*\|?\s*[-:]+[-| :]*\|?\s*$', stripped) and ("-" in stripped):
+                continue
+            if stripped.startswith("|") and stripped.endswith("|"):
+                cells = [c.strip() for c in stripped.split("|") if c.strip()]
+                if not cells or all(re.match(r'^[-:]+$', c) for c in cells):
+                    continue
+                c1 = re.sub(r'^\*+|\*+$', '', cells[0]).strip()
+                if len(cells) == 1:
+                    lines.append(f"• {c1}")
+                elif len(cells) == 2:
+                    c2 = re.sub(r'^\*+|\*+$', '', cells[1]).strip()
+                    lines.append(f"• {c1}: {c2}")
+                else:
+                    crest = " — ".join(re.sub(r'^\*+|\*+$', '', c).strip() for c in cells[1:])
+                    lines.append(f"• {c1}: {crest}")
+                continue
+            lines.append(line)
+        text = "\n".join(lines)
+
     # Remove headings #, ##, etc.
     text = re.sub(r'^#{1,6}\s*', '', text, flags=re.MULTILINE)
     # Remove bold/italic markers
@@ -2973,15 +3023,42 @@ def strip_markdown_for_text(markdown_text: str) -> str:
     text = re.sub(r'\[(.*?)\]\((.*?)\)', r'\1 (\2)', text)
     # Remove inline code backticks
     text = re.sub(r'`(.*?)`', r'\1', text)
+    # Clean up any leftover asterisks or underscores
+    text = text.replace("**", "").replace("__", "")
     # Normalize horizontal rules
     text = re.sub(r'^\s*[-*_]{3,}\s*$', '----------------------------------------', text, flags=re.MULTILINE)
+    return text.strip()
+
+
+def format_inline_markdown_for_reportlab(text: str) -> str:
+    """
+    Sanitizes inline markdown (*, **, links, code) into XML-safe styling tags
+    supported by ReportLab Paragraphs (<b>, <i>).
+    """
+    if not text:
+        return ""
+    # Strip markdown links [label](url) -> label (url)
+    text = re.sub(r'\[(.*?)\]\((.*?)\)', r'\1 (\2)', text)
+    # Strip inline code backticks `code` -> code
+    text = re.sub(r'`(.*?)`', r'\1', text)
+    # XML escape &, <, >
+    text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    # Convert bold / italic markers into ReportLab HTML tags
+    text = re.sub(r'\*\*\*(.*?)\*\*\*', r'<b><i>\1</i></b>', text)
+    text = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', text)
+    text = re.sub(r'__(.*?)__', r'<b>\1</b>', text)
+    text = re.sub(r'(?<!\w)\*([^*]+?)\*(?!\w)', r'<i>\1</i>', text)
+    text = re.sub(r'(?<!\w)_([^_]+?)_(?!\w)', r'<i>\1</i>', text)
+    # Clean up any trailing broken asterisks or underscores
+    text = text.replace("**", "").replace("__", "")
     return text.strip()
 
 
 def generate_policy_pdf(markdown_or_text: str, entity_name: str, audit_id: str) -> bytes:
     """
     Generates a professional PDF version of the replacement Privacy Policy
-    complete with Kenyan ODPC compliance header, styled sections, and legal disclaimer.
+    complete with Kenyan ODPC compliance header, styled sections, clean bullet lists,
+    and legal disclaimer. Safely converts any legacy markdown tables into clean bullet lines.
     """
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -3013,11 +3090,11 @@ def generate_policy_pdf(markdown_or_text: str, entity_name: str, audit_id: str) 
     h2_style = ParagraphStyle(
         "Heading2Custom",
         parent=styles["Heading2"],
-        fontSize=13,
-        leading=16,
+        fontSize=12,
+        leading=15,
         textColor=colors.HexColor("#111827"),
-        spaceBefore=12,
-        spaceAfter=6
+        spaceBefore=10,
+        spaceAfter=5
     )
     body_style = ParagraphStyle(
         "BodyCustom",
@@ -3047,29 +3124,80 @@ def generate_policy_pdf(markdown_or_text: str, entity_name: str, audit_id: str) 
 
     story = []
 
-    # Title & Subtitle
-    story.append(Paragraph(f"ODPC-COMPLIANT PRIVACY POLICY", title_style))
-    story.append(Paragraph(f"Prepared for <b>{entity_name}</b> | Audit Ref: {audit_id[:8]}", subtitle_style))
+    # Title & Subtitle Header
+    story.append(Paragraph("ODPC-COMPLIANT PRIVACY POLICY", title_style))
+    story.append(Paragraph(f"Prepared for <b>{entity_name}</b> &mdash; Audit Ref: {audit_id[:8]}", subtitle_style))
     story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#10b981"), spaceAfter=14))
 
-    # Split lines and build flowables
-    clean_lines = strip_markdown_for_text(markdown_or_text).split("\n")
-    for raw_line in clean_lines:
+    # Parse lines and build structured flowables
+    for raw_line in markdown_or_text.split("\n"):
         line = raw_line.strip()
         if not line:
             story.append(Spacer(1, 4))
             continue
-        if line.startswith("---") or line.startswith("==="):
+
+        # 1. Skip table separator lines like |---|---| or |:---|:---|
+        if re.match(r'^\s*\|?\s*[-:]+[-| :]*\|?\s*$', line) and ("-" in line):
+            continue
+
+        # 2. Legacy table row fallback: convert pipe rows to clean scannable bullet lines
+        if (line.startswith("|") and line.endswith("|")) or (" | " in line and line.startswith("|")):
+            cells = [c.strip() for c in line.split("|") if c.strip()]
+            if not cells or all(re.match(r'^[-:]+$', c) for c in cells):
+                continue
+            c1 = re.sub(r'^\*+|\*+$', '', cells[0]).strip()
+            c1_fmt = format_inline_markdown_for_reportlab(c1)
+            if len(cells) == 1:
+                story.append(Paragraph(f"&bull; <b>{c1_fmt}</b>", bullet_style))
+            elif len(cells) == 2:
+                c2_fmt = format_inline_markdown_for_reportlab(cells[1])
+                story.append(Paragraph(f"&bull; <b>{c1_fmt}:</b> {c2_fmt}", bullet_style))
+            else:
+                crest_fmt = " &mdash; ".join(format_inline_markdown_for_reportlab(c) for c in cells[1:])
+                story.append(Paragraph(f"&bull; <b>{c1_fmt}:</b> {crest_fmt}", bullet_style))
+            continue
+
+        # 3. Horizontal dividers (---, ===, ___)
+        if line.startswith("---") or line.startswith("===") or re.match(r'^\s*[-*_]{3,}\s*$', line):
             story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#e5e7eb"), spaceBefore=4, spaceAfter=6))
-        elif re.match(r'^\d+\.\s+', line) or line.startswith("Section ") or line.isupper() and len(line) < 60:
-            story.append(Paragraph(line, h2_style))
-        elif line.startswith("•") or line.startswith("-") or line.startswith("*"):
-            bullet_text = line.lstrip("•-* ").strip()
-            story.append(Paragraph(f"&bull; {bullet_text}", bullet_style))
-        elif "Legal Disclaimer:" in line or "Advocate of the High Court" in line:
-            story.append(Paragraph(line, disclaimer_style))
-        else:
-            story.append(Paragraph(line, body_style))
+            continue
+
+        # 4. Markdown Headings (#, ##, ###)
+        if line.startswith("#"):
+            heading_text = re.sub(r'^#{1,6}\s*', '', line).strip()
+            if heading_text.upper().startswith("ODPC-COMPLIANT PRIVACY POLICY"):
+                if "(" in heading_text and ")" in heading_text:
+                    sector_sub = heading_text[heading_text.find("("):heading_text.rfind(")")+1]
+                    story.append(Paragraph(f"<b>Operational Profile:</b> {sector_sub}", subtitle_style))
+                continue
+            story.append(Paragraph(format_inline_markdown_for_reportlab(heading_text), h2_style))
+            continue
+
+        # 5. Section headings without '#' prefix (e.g., '1. Introduction...', 'Section 4: ...')
+        if (re.match(r'^(?:Section\s+\d+|[0-9]{1,2}\.\s+[A-Z])', line) and len(line) < 85) or (line.isupper() and len(line) < 60 and not line.startswith("ODPC")):
+            story.append(Paragraph(format_inline_markdown_for_reportlab(line), h2_style))
+            continue
+
+        # 6. Bullet lists (•, -, *)
+        if line.startswith("•") or line.startswith("- ") or line.startswith("* "):
+            bullet_text = re.sub(r'^[•\-\*]\s*', '', line).strip()
+            story.append(Paragraph(f"&bull; {format_inline_markdown_for_reportlab(bullet_text)}", bullet_style))
+            continue
+
+        # 7. Numbered lists (1. , 2. )
+        num_match = re.match(r'^(\d+)\.\s+(.*)', line)
+        if num_match:
+            num, item_text = num_match.groups()
+            story.append(Paragraph(f"<b>{num}.</b> {format_inline_markdown_for_reportlab(item_text)}", bullet_style))
+            continue
+
+        # 8. Legal Disclaimer
+        if "Legal Disclaimer:" in line or "Advocate of the High Court" in line:
+            story.append(Paragraph(format_inline_markdown_for_reportlab(line), disclaimer_style))
+            continue
+
+        # 9. Standard body paragraph
+        story.append(Paragraph(format_inline_markdown_for_reportlab(line), body_style))
 
     doc.build(story)
     pdf_bytes = buffer.getvalue()

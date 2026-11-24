@@ -342,10 +342,66 @@ class TestRAGAuditor(unittest.TestCase):
             for g in gaps:
                 self.assertEqual(g["severity"], "Medium")
 
-    def test_audit_cache_version_is_v11(self):
-        """Verifies AUDIT_CACHE_VERSION is bumped to v11 in app.py."""
+    def test_audit_cache_version_is_v12(self):
+        """Verifies AUDIT_CACHE_VERSION is bumped to v12 in app.py."""
         import app as flask_app
-        self.assertEqual(flask_app.AUDIT_CACHE_VERSION, "v11")
+        self.assertEqual(flask_app.AUDIT_CACHE_VERSION, "v12")
+
+    def test_static_policy_drafts_contain_no_pipe_tables(self):
+        """Verifies that static fallback redrafts across all sectors use bolded bullet lists instead of pipe tables."""
+        from services.rag_auditor import generate_static_policy_draft
+        sectors = [
+            ("Kabarak University", "kabarak.ac.ke"),
+            ("Avenue Hospital", "avenuehealthcare.com"),
+            ("Zenka Digital", "zenka.co.ke"),
+            ("Jumia Kenya", "jumia.co.ke"),
+            ("Corporate Consulting", "corpconsult.co.ke")
+        ]
+        for name, domain in sectors:
+            draft = generate_static_policy_draft(name, domain)
+            self.assertNotIn("| :---", draft, f"Found pipe table divider in {name} draft")
+            self.assertNotIn("|---", draft, f"Found pipe table divider in {name} draft")
+            # Verify bolded bullet list exists in Section 4
+            self.assertIn("### 4. Purposes and Lawful Bases", draft, f"Section 4 missing in {name} draft")
+            self.assertIn("- **", draft, f"Expected bolded bullets in {name} draft")
+
+    def test_strip_markdown_for_text_converts_legacy_tables(self):
+        """Verifies strip_markdown_for_text converts legacy pipe tables to clean bullet lines."""
+        from services.rag_auditor import strip_markdown_for_text
+        legacy_markdown = (
+            "### 4. Purposes and Lawful Bases\n"
+            "| Processing Activity | Lawful Basis |\n"
+            "| :--- | :--- |\n"
+            "| Order fulfillment | **Contractual Performance** |\n"
+            "| Tax auditing | **Legal Obligation** |\n"
+        )
+        plain_text = strip_markdown_for_text(legacy_markdown)
+        self.assertNotIn("|", plain_text)
+        self.assertNotIn(":---", plain_text)
+        self.assertIn("• Processing Activity: Lawful Basis", plain_text)
+        self.assertIn("• Order fulfillment: Contractual Performance", plain_text)
+        self.assertIn("• Tax auditing: Legal Obligation", plain_text)
+
+    def test_generate_policy_pdf_with_legacy_table_and_markdown(self):
+        """Verifies generate_policy_pdf processes legacy pipe tables and bold markdown without crashing."""
+        from services.rag_auditor import generate_policy_pdf
+        legacy_policy = (
+            "# ODPC-COMPLIANT PRIVACY POLICY\n"
+            "**Governed under the Kenya Data Protection Act, 2019**\n\n"
+            "### 1. Introduction\n"
+            "We are committed to protecting personal data.\n\n"
+            "### 4. Purposes & Lawful Bases\n"
+            "| Activity | Lawful Basis |\n"
+            "| :--- | :--- |\n"
+            "| Student admission | **Contractual Mandate** |\n"
+            "| Exam registration | **Legal Obligation** |\n\n"
+            "- **M-Pesa & Tax Records:** Retained for **7 years**.\n\n"
+            "*Legal Disclaimer: AI-assisted readiness instrument.*"
+        )
+        pdf_bytes = generate_policy_pdf(legacy_policy, "Kabarak University", "test-audit-12345678")
+        self.assertIsInstance(pdf_bytes, bytes)
+        self.assertGreater(len(pdf_bytes), 1000)
+        self.assertTrue(pdf_bytes.startswith(b"%PDF"))
 
     def test_html_table_preservation_in_clean_html_text(self):
         """Verifies HTML table rows with short cells are preserved as pipe-separated text."""
